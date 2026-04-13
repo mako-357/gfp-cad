@@ -14,7 +14,22 @@ async fn main() -> Result<()> {
 
     tracing::info!("gfp-cad MCP Server starting...");
 
-    let server = server::GfpCadMcpServer::new();
+    // DB 接続（オプション — 接続できなくてもローカルモードで動作）
+    let db = match cad_db::CadDbClient::connect(&cad_db::DbConfig::from_env()).await {
+        Ok(client) => {
+            if let Err(e) = client.init_schema().await {
+                tracing::warn!("Schema init failed: {e}");
+            }
+            tracing::info!("SurrealDB connected");
+            Some(client)
+        }
+        Err(e) => {
+            tracing::warn!("SurrealDB not available: {e} (running in local-only mode)");
+            None
+        }
+    };
+
+    let server = server::GfpCadMcpServer::new(db);
     let service = server.serve(rmcp::transport::stdio()).await?;
 
     tracing::info!("gfp-cad MCP Server running");

@@ -9,6 +9,7 @@ path = "src/main.rs"
 
 [dependencies]
 cad-core = { path = "../cad-core" }
+cad-db = { path = "../cad-db" }
 cad-dxf = { path = "../cad-dxf" }
 cad-acad = { path = "../cad-acad" }
 rmcp = { version = "1.4", features = ["server", "transport-io", "macros"] }
@@ -20,3 +21,4 @@ tokio = { version = "1", features = ["full"] }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+surrealdb = { version = "2", features = ["protocol-ws"] }
