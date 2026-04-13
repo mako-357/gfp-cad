@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/cad-core",
+    "crates/cad-db",
     "crates/cad-dxf",
     "crates/cad-acad",
     "crates/cad-mcp",

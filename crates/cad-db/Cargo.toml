@@ -1,0 +1,15 @@
+[package]
+name = "cad-db"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+cad-core = { path = "../cad-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+surrealdb = { version = "2", features = ["protocol-ws"] }
+tokio = { version = "1", features = ["full"] }
