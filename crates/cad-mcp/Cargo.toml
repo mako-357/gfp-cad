@@ -1,0 +1,22 @@
+[package]
+name = "cad-mcp"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "gfp-cad-mcp"
+path = "src/main.rs"
+
+[dependencies]
+cad-core = { path = "../cad-core" }
+cad-dxf = { path = "../cad-dxf" }
+cad-acad = { path = "../cad-acad" }
+rmcp = { version = "1.4", features = ["server", "transport-io", "macros"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+schemars = "0.8"
+uuid = { workspace = true }
+tokio = { version = "1", features = ["full"] }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
