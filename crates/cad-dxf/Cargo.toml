@@ -3,8 +3,10 @@ name = "cad-dxf"
 version = "0.1.0"
 edition = "2024"
 
+[[example]]
+name = "export_yamanakako"
+
 [dependencies]
 cad-core = { path = "../cad-core" }
-serde = { workspace = true }
-serde_json = { workspace = true }
 thiserror = { workspace = true }
+encoding_rs = "0.8"
