@@ -22,6 +22,7 @@ impl CadDbClient {
         let name = name.map(|s| s.to_string());
         let picture = picture.map(|s| s.to_string());
 
+        // 既存ユーザーの検索（トランザクション外 — 読み取りのみ）
         let mut result = self
             .db
             .query("SELECT * FROM auth_identities WHERE provider = $provider AND provider_user_id = $pid LIMIT 1")
@@ -30,38 +31,38 @@ impl CadDbClient {
             .await?;
         let existing: Vec<AuthIdentity> = result.take(0)?;
 
-        if let Some(identity) = existing.first() {
-            if let Some(ref user_id) = identity.user_id {
-                let mut result = self
-                    .db
-                    .query("UPDATE $uid SET last_login_at = time::now()")
-                    .bind(("uid", user_id.clone()))
-                    .await?;
-                let users: Vec<User> = result.take(0)?;
-                if let Some(user) = users.into_iter().next() {
-                    return Ok(user);
-                }
+        if let Some(identity) = existing.first()
+            && let Some(ref user_id) = identity.user_id
+        {
+            let mut result = self
+                .db
+                .query("UPDATE $uid SET last_login_at = time::now()")
+                .bind(("uid", user_id.clone()))
+                .await?;
+            let users: Vec<User> = result.take(0)?;
+            if let Some(user) = users.into_iter().next() {
+                return Ok(user);
             }
         }
 
+        // 新規ユーザー作成はトランザクションでラップ（user + auth_identity の整合性保証）
         let mut result = self
             .db
-            .query("CREATE users CONTENT { email: $email, name: $name, picture: $picture }")
+            .query("BEGIN TRANSACTION; \
+                    LET $user = CREATE users CONTENT { email: $email, name: $name, picture: $picture }; \
+                    CREATE auth_identities CONTENT { user_id: $user[0].id, provider: $provider, provider_user_id: $pid, source: 'mcp-server' }; \
+                    COMMIT TRANSACTION; \
+                    SELECT * FROM users WHERE email = $email ORDER BY created_at DESC LIMIT 1")
             .bind(("email", email))
             .bind(("name", name))
             .bind(("picture", picture))
-            .await
-            .context("ユーザー作成失敗")?;
-        let users: Vec<User> = result.take(0)?;
-        let user = users.into_iter().next().context("ユーザー作成結果なし")?;
-
-        self.db
-            .query("CREATE auth_identities CONTENT { user_id: $uid, provider: $provider, provider_user_id: $pid, source: 'mcp-server' }")
-            .bind(("uid", user.id.clone()))
             .bind(("provider", provider))
             .bind(("pid", provider_user_id))
             .await
-            .context("auth_identity 作成失敗")?;
+            .context("ユーザー作成トランザクション失敗")?;
+        // トランザクション後の SELECT 結果を取得（ステートメントインデックス 4）
+        let users: Vec<User> = result.take(4)?;
+        let user = users.into_iter().next().context("ユーザー作成結果なし")?;
 
         let ws_name = format!("{}のワークスペース", user.name.as_deref().unwrap_or("My"));
         self.create_workspace(&user, &ws_name).await?;
@@ -101,10 +102,10 @@ impl CadDbClient {
         };
         let mut result = self
             .db
-            .query("SELECT ->workspace_member->workspaces.* AS ws FROM $uid")
+            .query("SELECT * FROM workspaces WHERE id IN (SELECT out FROM workspace_member WHERE in = $uid)")
             .bind(("uid", uid.clone()))
             .await?;
-        let workspaces: Vec<Workspace> = result.take("ws")?;
+        let workspaces: Vec<Workspace> = result.take(0)?;
         Ok(workspaces)
     }
 
@@ -171,7 +172,7 @@ impl CadDbClient {
         let bid = building_id.clone();
         let mut result = self
             .db
-            .query("SELECT data FROM $bid")
+            .query("SELECT * FROM $bid")
             .bind(("bid", bid))
             .await?;
         let records: Vec<BuildingRecord> = result.take(0)?;

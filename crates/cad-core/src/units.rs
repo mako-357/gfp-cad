@@ -1,5 +1,5 @@
-/// 全ての寸法は mm (ミリメートル) で統一
-/// 角度は度 (degrees) で統一
+//! 全ての寸法は mm (ミリメートル) で統一
+//! 角度は度 (degrees) で統一
 
 use serde::{Deserialize, Serialize};
 

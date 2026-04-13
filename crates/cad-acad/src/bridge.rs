@@ -19,7 +19,9 @@ struct Request {
 pub struct Response {
     #[allow(dead_code)]
     pub id: String,
+    #[allow(dead_code)]
     pub success: bool,
+    #[allow(dead_code)]
     pub data: serde_json::Value,
 }
 

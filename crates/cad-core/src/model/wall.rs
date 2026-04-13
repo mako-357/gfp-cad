@@ -25,11 +25,12 @@ pub struct Wall {
     pub is_exterior: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub enum WallMaterial {
     /// RC (鉄筋コンクリート)
     RC,
     /// 軽量鉄骨 (LGS)
+    #[default]
     LGS,
     /// 木造
     Wood,
@@ -39,12 +40,6 @@ pub enum WallMaterial {
     CB,
     /// その他
     Other(String),
-}
-
-impl Default for WallMaterial {
-    fn default() -> Self {
-        Self::LGS
-    }
 }
 
 impl Wall {

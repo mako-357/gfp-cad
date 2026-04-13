@@ -2,7 +2,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use cad_core::*;
-use cad_db::CadDbClient;
+use cad_db::{CadDbClient, Workspace};
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{ServerCapabilities, ServerInfo};
@@ -186,6 +186,11 @@ impl GfpCadMcpServer {
 
     #[tool(name = "export_dxf", description = "DXF に出力")]
     async fn export_dxf(&self, Parameters(i): Parameters<ExportDxfInput>) -> String {
+        // パストラバーサル防止
+        let p = std::path::Path::new(&i.path);
+        if p.components().any(|c| c == std::path::Component::ParentDir) {
+            return "Error: path traversal not allowed".into();
+        }
         let s = self.state.lock().await;
         let Some(b) = &s.building else { return NO_BLDG.into() };
         let enc = match i.encoding.as_deref() { Some("shift_jis" | "sjis") => cad_dxf::DxfEncoding::ShiftJis, _ => cad_dxf::DxfEncoding::Utf8 };
@@ -205,7 +210,8 @@ impl GfpCadMcpServer {
 
     // === クラウド ===
 
-    #[tool(name = "login", description = "Auth0 ログイン")]
+    // TODO: 本番環境では JWT 検証を実装する（Auth0 JWKS による署名検証 + exp/aud チェック）
+    #[tool(name = "login", description = "Auth0 ログイン（ローカル専用。本番ではJWT検証が必要）")]
     async fn login(&self, Parameters(i): Parameters<LoginInput>) -> String {
         let Some(db) = self.db.as_ref() else { return NO_DB.into() };
         match db.upsert_user_by_auth(&i.provider, &i.provider_user_id, &i.email, i.name.as_deref(), None).await {
@@ -232,7 +238,26 @@ impl GfpCadMcpServer {
 
     #[tool(name = "select_workspace", description = "ワークスペース選択")]
     async fn select_workspace(&self, Parameters(i): Parameters<SelectInput>) -> String {
-        self.state.lock().await.current_workspace = Some(make_rid("workspaces", &i.id));
+        let rid = make_rid("workspaces", &i.id);
+        // DB 接続時はワークスペースの存在を確認
+        if let Some(db) = self.db.as_ref() {
+            let result = db.db.query("SELECT * FROM $wid")
+                .bind(("wid", rid.clone()))
+                .await;
+            match result {
+                Ok(mut res) => {
+                    let found: Vec<Workspace> = res.take(0).unwrap_or_default();
+                    if found.is_empty() {
+                        return format!("Error: Workspace '{}' not found", i.id);
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Workspace existence check failed: {e}");
+                    // DB エラー時はそのまま設定（ローカルモード相当）
+                }
+            }
+        }
+        self.state.lock().await.current_workspace = Some(rid);
         format!("Workspace: {}", i.id)
     }
 

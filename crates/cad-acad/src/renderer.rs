@@ -34,10 +34,8 @@ impl AcadRenderer {
         self.setup_layers()?;
         report.layers_created = 6;
 
-        // 通り芯
-        for floor in &bldg.floors {
-            report.grid_lines += self.render_grid(&bldg.grid, floor)?;
-        }
+        // 通り芯（建物で1回だけ描画）
+        report.grid_lines += self.render_grid(&bldg.grid)?;
 
         // 各階を描画
         for floor in &bldg.floors {
@@ -70,7 +68,7 @@ impl AcadRenderer {
         Ok(())
     }
 
-    fn render_grid(&self, grid: &GridSystem, floor: &Floor) -> Result<usize> {
+    fn render_grid(&self, grid: &GridSystem) -> Result<usize> {
         let ox = self.origin.x;
         let oy = self.origin.y;
         let mut count = 0;
@@ -149,7 +147,6 @@ impl AcadRenderer {
             }))?;
         }
 
-        let _ = floor; // 将来: 階ごとの通り芯表示制御
         Ok(count)
     }
 
