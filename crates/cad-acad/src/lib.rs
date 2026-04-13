@@ -1,1 +1,4 @@
-// AutoCAD MCP 出力（今後実装）
+mod bridge;
+mod renderer;
+
+pub use renderer::AcadRenderer;

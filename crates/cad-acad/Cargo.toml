@@ -3,8 +3,13 @@ name = "cad-acad"
 version = "0.1.0"
 edition = "2024"
 
+[[example]]
+name = "render_yamanakako"
+required-features = []
+
 [dependencies]
 cad-core = { path = "../cad-core" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
+tracing = { workspace = true }
