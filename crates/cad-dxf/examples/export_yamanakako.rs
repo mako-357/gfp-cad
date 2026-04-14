@@ -25,51 +25,106 @@ fn build_yamanakako() -> Building {
     let mut ws = Wall::new(Point2D::new(0.0, 0.0), Point2D::new(12857.0, 0.0), 150.0);
     ws.is_exterior = true;
     let ws_id = ws.id;
-    let mut wn = Wall::new(Point2D::new(0.0, 10680.0), Point2D::new(12857.0, 10680.0), 150.0);
+    let mut wn = Wall::new(
+        Point2D::new(0.0, 10680.0),
+        Point2D::new(12857.0, 10680.0),
+        150.0,
+    );
     wn.is_exterior = true;
     let wn_id = wn.id;
     let mut ww = Wall::new(Point2D::new(0.0, 0.0), Point2D::new(0.0, 10680.0), 150.0);
     ww.is_exterior = true;
     let ww_id = ww.id;
-    let mut we = Wall::new(Point2D::new(12857.0, 0.0), Point2D::new(12857.0, 10680.0), 150.0);
+    let mut we = Wall::new(
+        Point2D::new(12857.0, 0.0),
+        Point2D::new(12857.0, 10680.0),
+        150.0,
+    );
     we.is_exterior = true;
     let we_id = we.id;
 
-    let w_b = Wall::new(Point2D::new(6523.0, 0.0), Point2D::new(6523.0, 2875.0), 80.0);
-    let w_f = Wall::new(Point2D::new(0.0, 2875.0), Point2D::new(12857.0, 2875.0), 80.0);
-    let w_e = Wall::new(Point2D::new(0.0, 8957.0), Point2D::new(6523.0, 8957.0), 80.0);
-    let w_e2 = Wall::new(Point2D::new(6523.0, 8957.0), Point2D::new(12857.0, 8957.0), 80.0);
+    let w_b = Wall::new(
+        Point2D::new(6523.0, 0.0),
+        Point2D::new(6523.0, 2875.0),
+        80.0,
+    );
+    let w_f = Wall::new(
+        Point2D::new(0.0, 2875.0),
+        Point2D::new(12857.0, 2875.0),
+        80.0,
+    );
+    let w_e = Wall::new(
+        Point2D::new(0.0, 8957.0),
+        Point2D::new(6523.0, 8957.0),
+        80.0,
+    );
+    let w_e2 = Wall::new(
+        Point2D::new(6523.0, 8957.0),
+        Point2D::new(12857.0, 8957.0),
+        80.0,
+    );
 
     f1.walls = vec![ws, wn, ww, we, w_b, w_f, w_e, w_e2];
 
-    f1.openings.push(Opening::window(ws_id, 3000.0, 3600.0, 2000.0, 400.0));
-    f1.openings.push(Opening::window(ws_id, 9000.0, 2400.0, 1200.0, 800.0));
-    f1.openings.push(Opening::window(wn_id, 3000.0, 1600.0, 1200.0, 800.0));
-    f1.openings.push(Opening::window(wn_id, 9000.0, 1600.0, 1200.0, 800.0));
-    f1.openings.push(Opening::door(ww_id, 5000.0, 900.0, 2100.0));
-    f1.openings.push(Opening::window(we_id, 5000.0, 1600.0, 1200.0, 800.0));
+    f1.openings
+        .push(Opening::window(ws_id, 3000.0, 3600.0, 2000.0, 400.0));
+    f1.openings
+        .push(Opening::window(ws_id, 9000.0, 2400.0, 1200.0, 800.0));
+    f1.openings
+        .push(Opening::window(wn_id, 3000.0, 1600.0, 1200.0, 800.0));
+    f1.openings
+        .push(Opening::window(wn_id, 9000.0, 1600.0, 1200.0, 800.0));
+    f1.openings
+        .push(Opening::door(ww_id, 5000.0, 900.0, 2100.0));
+    f1.openings
+        .push(Opening::window(we_id, 5000.0, 1600.0, 1200.0, 800.0));
 
     f1.rooms = vec![
-        Room::new("リビング", vec![
-            Point2D::new(6523.0, 0.0), Point2D::new(12857.0, 0.0),
-            Point2D::new(12857.0, 2875.0), Point2D::new(6523.0, 2875.0),
-        ]),
-        Room::new("DK", vec![
-            Point2D::new(0.0, 0.0), Point2D::new(6523.0, 0.0),
-            Point2D::new(6523.0, 2875.0), Point2D::new(0.0, 2875.0),
-        ]),
-        Room::new("メインルーム", vec![
-            Point2D::new(0.0, 2875.0), Point2D::new(12857.0, 2875.0),
-            Point2D::new(12857.0, 8957.0), Point2D::new(0.0, 8957.0),
-        ]),
-        Room::new("ユーティリティ", vec![
-            Point2D::new(0.0, 8957.0), Point2D::new(6523.0, 8957.0),
-            Point2D::new(6523.0, 10680.0), Point2D::new(0.0, 10680.0),
-        ]),
-        Room::new("寝室", vec![
-            Point2D::new(6523.0, 8957.0), Point2D::new(12857.0, 8957.0),
-            Point2D::new(12857.0, 10680.0), Point2D::new(6523.0, 10680.0),
-        ]),
+        Room::new(
+            "リビング",
+            vec![
+                Point2D::new(6523.0, 0.0),
+                Point2D::new(12857.0, 0.0),
+                Point2D::new(12857.0, 2875.0),
+                Point2D::new(6523.0, 2875.0),
+            ],
+        ),
+        Room::new(
+            "DK",
+            vec![
+                Point2D::new(0.0, 0.0),
+                Point2D::new(6523.0, 0.0),
+                Point2D::new(6523.0, 2875.0),
+                Point2D::new(0.0, 2875.0),
+            ],
+        ),
+        Room::new(
+            "メインルーム",
+            vec![
+                Point2D::new(0.0, 2875.0),
+                Point2D::new(12857.0, 2875.0),
+                Point2D::new(12857.0, 8957.0),
+                Point2D::new(0.0, 8957.0),
+            ],
+        ),
+        Room::new(
+            "ユーティリティ",
+            vec![
+                Point2D::new(0.0, 8957.0),
+                Point2D::new(6523.0, 8957.0),
+                Point2D::new(6523.0, 10680.0),
+                Point2D::new(0.0, 10680.0),
+            ],
+        ),
+        Room::new(
+            "寝室",
+            vec![
+                Point2D::new(6523.0, 8957.0),
+                Point2D::new(12857.0, 8957.0),
+                Point2D::new(12857.0, 10680.0),
+                Point2D::new(6523.0, 10680.0),
+            ],
+        ),
     ];
 
     bldg.add_floor(f1);
@@ -98,7 +153,11 @@ fn main() {
     }
 
     // ファイルサイズ確認
-    let utf8_size = std::fs::metadata("/tmp/yamanakako-b1-utf8.dxf").unwrap().len();
-    let sjis_size = std::fs::metadata("/tmp/yamanakako-b1-sjis.dxf").unwrap().len();
+    let utf8_size = std::fs::metadata("/tmp/yamanakako-b1-utf8.dxf")
+        .unwrap()
+        .len();
+    let sjis_size = std::fs::metadata("/tmp/yamanakako-b1-sjis.dxf")
+        .unwrap()
+        .len();
     println!("\nFile sizes: UTF-8={utf8_size} bytes, Shift-JIS={sjis_size} bytes");
 }

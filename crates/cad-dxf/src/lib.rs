@@ -1,3 +1,3 @@
 mod writer;
 
-pub use writer::{DxfExporter, DxfEncoding};
+pub use writer::{DxfEncoding, DxfExporter};

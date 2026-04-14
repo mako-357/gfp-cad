@@ -83,7 +83,10 @@ impl CadDbClient {
             .await
             .context("ワークスペース作成失敗")?;
         let workspaces: Vec<Workspace> = result.take(0)?;
-        let ws = workspaces.into_iter().next().context("ワークスペース作成結果なし")?;
+        let ws = workspaces
+            .into_iter()
+            .next()
+            .context("ワークスペース作成結果なし")?;
 
         if let (Some(uid), Some(wsid)) = (&user.id, &ws.id) {
             self.db
@@ -129,7 +132,10 @@ impl CadDbClient {
             .await
             .context("プロジェクト作成失敗")?;
         let projects: Vec<Project> = result.take(0)?;
-        projects.into_iter().next().context("プロジェクト作成結果なし")
+        projects
+            .into_iter()
+            .next()
+            .context("プロジェクト作成結果なし")
     }
 
     pub async fn list_projects(&self, workspace_id: &RecordId) -> Result<Vec<Project>> {

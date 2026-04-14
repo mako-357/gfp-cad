@@ -26,8 +26,7 @@ pub struct Response {
 }
 
 pub fn send(method: &str, params: serde_json::Value) -> Result<Response> {
-    let mut stream = UnixStream::connect(SOCKET_PATH)
-        .context("AutoCAD に接続できません")?;
+    let mut stream = UnixStream::connect(SOCKET_PATH).context("AutoCAD に接続できません")?;
     stream.set_read_timeout(Some(Duration::from_secs(15)))?;
     stream.set_write_timeout(Some(Duration::from_secs(5)))?;
 

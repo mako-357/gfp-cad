@@ -74,56 +74,88 @@ impl AcadRenderer {
         let mut count = 0;
 
         // 建物の範囲
-        let x_max = grid.x_axes.iter().map(|a| a.position).fold(0.0f64, f64::max);
-        let y_max = grid.y_axes.iter().map(|a| a.position).fold(0.0f64, f64::max);
+        let x_max = grid
+            .x_axes
+            .iter()
+            .map(|a| a.position)
+            .fold(0.0f64, f64::max);
+        let y_max = grid
+            .y_axes
+            .iter()
+            .map(|a| a.position)
+            .fold(0.0f64, f64::max);
         let margin = 2000.0;
 
         // X 通り芯（縦線）
         for axis in &grid.x_axes {
             let x = ox + axis.position;
-            bridge::send("draw_line", json!({
-                "x1": x, "y1": oy - margin,
-                "x2": x, "y2": oy + y_max + margin,
-                "layer": "GFP_GRID"
-            }))?;
+            bridge::send(
+                "draw_line",
+                json!({
+                    "x1": x, "y1": oy - margin,
+                    "x2": x, "y2": oy + y_max + margin,
+                    "layer": "GFP_GRID"
+                }),
+            )?;
             // ラベル（上）
-            bridge::send("draw_circle", json!({
-                "cx": x, "cy": oy + y_max + margin + 300.0,
-                "radius": 250.0, "layer": "GFP_GRID"
-            }))?;
-            bridge::send("draw_text", json!({
-                "x": x - 60.0, "y": oy + y_max + margin + 220.0,
-                "text": axis.name, "height": 150.0, "layer": "GFP_GRID"
-            }))?;
+            bridge::send(
+                "draw_circle",
+                json!({
+                    "cx": x, "cy": oy + y_max + margin + 300.0,
+                    "radius": 250.0, "layer": "GFP_GRID"
+                }),
+            )?;
+            bridge::send(
+                "draw_text",
+                json!({
+                    "x": x - 60.0, "y": oy + y_max + margin + 220.0,
+                    "text": axis.name, "height": 150.0, "layer": "GFP_GRID"
+                }),
+            )?;
             // ラベル（下）
-            bridge::send("draw_circle", json!({
-                "cx": x, "cy": oy - margin - 300.0,
-                "radius": 250.0, "layer": "GFP_GRID"
-            }))?;
-            bridge::send("draw_text", json!({
-                "x": x - 60.0, "y": oy - margin - 380.0,
-                "text": axis.name, "height": 150.0, "layer": "GFP_GRID"
-            }))?;
+            bridge::send(
+                "draw_circle",
+                json!({
+                    "cx": x, "cy": oy - margin - 300.0,
+                    "radius": 250.0, "layer": "GFP_GRID"
+                }),
+            )?;
+            bridge::send(
+                "draw_text",
+                json!({
+                    "x": x - 60.0, "y": oy - margin - 380.0,
+                    "text": axis.name, "height": 150.0, "layer": "GFP_GRID"
+                }),
+            )?;
             count += 1;
         }
 
         // Y 通り芯（横線）
         for axis in &grid.y_axes {
             let y = oy + axis.position;
-            bridge::send("draw_line", json!({
-                "x1": ox - margin, "y1": y,
-                "x2": ox + x_max + margin, "y2": y,
-                "layer": "GFP_GRID"
-            }))?;
+            bridge::send(
+                "draw_line",
+                json!({
+                    "x1": ox - margin, "y1": y,
+                    "x2": ox + x_max + margin, "y2": y,
+                    "layer": "GFP_GRID"
+                }),
+            )?;
             // ラベル（左）
-            bridge::send("draw_circle", json!({
-                "cx": ox - margin - 300.0, "cy": y,
-                "radius": 250.0, "layer": "GFP_GRID"
-            }))?;
-            bridge::send("draw_text", json!({
-                "x": ox - margin - 360.0, "y": y - 80.0,
-                "text": axis.name, "height": 150.0, "layer": "GFP_GRID"
-            }))?;
+            bridge::send(
+                "draw_circle",
+                json!({
+                    "cx": ox - margin - 300.0, "cy": y,
+                    "radius": 250.0, "layer": "GFP_GRID"
+                }),
+            )?;
+            bridge::send(
+                "draw_text",
+                json!({
+                    "x": ox - margin - 360.0, "y": y - 80.0,
+                    "text": axis.name, "height": 150.0, "layer": "GFP_GRID"
+                }),
+            )?;
             count += 1;
         }
 
@@ -138,13 +170,19 @@ impl AcadRenderer {
             let x1 = ox + w[0].position;
             let x2 = ox + w[1].position;
             let span = (w[1].position - w[0].position).abs();
-            bridge::send("draw_line", json!({
-                "x1": x1, "y1": dim_y, "x2": x2, "y2": dim_y, "layer": "GFP_DIM"
-            }))?;
-            bridge::send("draw_text", json!({
-                "x": (x1 + x2) / 2.0 - 200.0, "y": dim_y + 50.0,
-                "text": format!("{:.0}", span), "height": 100.0, "layer": "GFP_DIM"
-            }))?;
+            bridge::send(
+                "draw_line",
+                json!({
+                    "x1": x1, "y1": dim_y, "x2": x2, "y2": dim_y, "layer": "GFP_DIM"
+                }),
+            )?;
+            bridge::send(
+                "draw_text",
+                json!({
+                    "x": (x1 + x2) / 2.0 - 200.0, "y": dim_y + 50.0,
+                    "text": format!("{:.0}", span), "height": 100.0, "layer": "GFP_DIM"
+                }),
+            )?;
         }
 
         Ok(count)
@@ -157,7 +195,11 @@ impl AcadRenderer {
 
         // 壁を描画
         for wall in &floor.walls {
-            let layer = if wall.is_exterior { "GFP_WALL_EXT" } else { "GFP_WALL" };
+            let layer = if wall.is_exterior {
+                "GFP_WALL_EXT"
+            } else {
+                "GFP_WALL"
+            };
 
             let s = Point2D::new(ox + wall.start.x, oy + wall.start.y);
             let e = Point2D::new(ox + wall.end.x, oy + wall.end.y);
@@ -180,9 +222,12 @@ impl AcadRenderer {
                 vec![e.x - nx, e.y - ny],
                 vec![s.x - nx, s.y - ny],
             ];
-            bridge::send("draw_polyline", json!({
-                "points": pts, "closed": true, "layer": layer
-            }))?;
+            bridge::send(
+                "draw_polyline",
+                json!({
+                    "points": pts, "closed": true, "layer": layer
+                }),
+            )?;
             report.walls += 1;
         }
 
@@ -211,16 +256,22 @@ impl AcadRenderer {
                 let nx = -uy * wall.thickness;
                 let ny = ux * wall.thickness;
 
-                bridge::send("draw_line", json!({
-                    "x1": cx - ux * hw + nx, "y1": cy - uy * hw + ny,
-                    "x2": cx + ux * hw + nx, "y2": cy + uy * hw + ny,
-                    "layer": "GFP_OPENING"
-                }))?;
-                bridge::send("draw_line", json!({
-                    "x1": cx - ux * hw - nx, "y1": cy - uy * hw - ny,
-                    "x2": cx + ux * hw - nx, "y2": cy + uy * hw - ny,
-                    "layer": "GFP_OPENING"
-                }))?;
+                bridge::send(
+                    "draw_line",
+                    json!({
+                        "x1": cx - ux * hw + nx, "y1": cy - uy * hw + ny,
+                        "x2": cx + ux * hw + nx, "y2": cy + uy * hw + ny,
+                        "layer": "GFP_OPENING"
+                    }),
+                )?;
+                bridge::send(
+                    "draw_line",
+                    json!({
+                        "x1": cx - ux * hw - nx, "y1": cy - uy * hw - ny,
+                        "x2": cx + ux * hw - nx, "y2": cy + uy * hw - ny,
+                        "layer": "GFP_OPENING"
+                    }),
+                )?;
 
                 report.openings += 1;
             }
@@ -232,17 +283,25 @@ impl AcadRenderer {
                 continue;
             }
             // 重心
-            let cx: f64 = room.boundary.iter().map(|p| p.x).sum::<f64>() / room.boundary.len() as f64;
-            let cy: f64 = room.boundary.iter().map(|p| p.y).sum::<f64>() / room.boundary.len() as f64;
+            let cx: f64 =
+                room.boundary.iter().map(|p| p.x).sum::<f64>() / room.boundary.len() as f64;
+            let cy: f64 =
+                room.boundary.iter().map(|p| p.y).sum::<f64>() / room.boundary.len() as f64;
 
-            bridge::send("draw_text", json!({
-                "x": ox + cx - 500.0, "y": oy + cy + 100.0,
-                "text": &room.name, "height": 150.0, "layer": "GFP_ROOM"
-            }))?;
-            bridge::send("draw_text", json!({
-                "x": ox + cx - 300.0, "y": oy + cy - 200.0,
-                "text": format!("{:.1}sqm", room.area()), "height": 100.0, "layer": "GFP_ROOM"
-            }))?;
+            bridge::send(
+                "draw_text",
+                json!({
+                    "x": ox + cx - 500.0, "y": oy + cy + 100.0,
+                    "text": &room.name, "height": 150.0, "layer": "GFP_ROOM"
+                }),
+            )?;
+            bridge::send(
+                "draw_text",
+                json!({
+                    "x": ox + cx - 300.0, "y": oy + cy - 200.0,
+                    "text": format!("{:.1}sqm", room.area()), "height": 100.0, "layer": "GFP_ROOM"
+                }),
+            )?;
             report.rooms += 1;
             report.texts += 2;
         }
@@ -251,15 +310,28 @@ impl AcadRenderer {
     }
 
     fn render_title(&self, bldg: &Building) -> Result<()> {
-        let x_max = bldg.grid.x_axes.iter().map(|a| a.position).fold(0.0f64, f64::max);
-        let y_max = bldg.grid.y_axes.iter().map(|a| a.position).fold(0.0f64, f64::max);
+        let x_max = bldg
+            .grid
+            .x_axes
+            .iter()
+            .map(|a| a.position)
+            .fold(0.0f64, f64::max);
+        let y_max = bldg
+            .grid
+            .y_axes
+            .iter()
+            .map(|a| a.position)
+            .fold(0.0f64, f64::max);
 
-        bridge::send("draw_text", json!({
-            "x": self.origin.x + x_max / 2.0 - 2000.0,
-            "y": self.origin.y + y_max + 4000.0,
-            "text": format!("{} — 1F Plan (gfp-cad)", bldg.name),
-            "height": 250.0, "layer": "GFP_DIM"
-        }))?;
+        bridge::send(
+            "draw_text",
+            json!({
+                "x": self.origin.x + x_max / 2.0 - 2000.0,
+                "y": self.origin.y + y_max + 4000.0,
+                "text": format!("{} — 1F Plan (gfp-cad)", bldg.name),
+                "height": 250.0, "layer": "GFP_DIM"
+            }),
+        )?;
         Ok(())
     }
 }

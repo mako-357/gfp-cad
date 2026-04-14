@@ -28,7 +28,11 @@ fn build_yamanakako() -> Building {
     ws.material = WallMaterial::Wood;
     let ws_id = ws.id;
 
-    let mut wn = Wall::new(Point2D::new(0.0, 10680.0), Point2D::new(12857.0, 10680.0), 150.0);
+    let mut wn = Wall::new(
+        Point2D::new(0.0, 10680.0),
+        Point2D::new(12857.0, 10680.0),
+        150.0,
+    );
     wn.is_exterior = true;
     let wn_id = wn.id;
 
@@ -36,54 +40,105 @@ fn build_yamanakako() -> Building {
     ww.is_exterior = true;
     let ww_id = ww.id;
 
-    let mut we = Wall::new(Point2D::new(12857.0, 0.0), Point2D::new(12857.0, 10680.0), 150.0);
+    let mut we = Wall::new(
+        Point2D::new(12857.0, 0.0),
+        Point2D::new(12857.0, 10680.0),
+        150.0,
+    );
     we.is_exterior = true;
     let we_id = we.id;
 
     // 間仕切壁
-    let w_b = Wall::new(Point2D::new(6523.0, 0.0), Point2D::new(6523.0, 2875.0), 80.0);
-    let w_f = Wall::new(Point2D::new(0.0, 2875.0), Point2D::new(12857.0, 2875.0), 80.0);
-    let w_e = Wall::new(Point2D::new(0.0, 8957.0), Point2D::new(6523.0, 8957.0), 80.0);
-    let w_e2 = Wall::new(Point2D::new(6523.0, 8957.0), Point2D::new(12857.0, 8957.0), 80.0);
+    let w_b = Wall::new(
+        Point2D::new(6523.0, 0.0),
+        Point2D::new(6523.0, 2875.0),
+        80.0,
+    );
+    let w_f = Wall::new(
+        Point2D::new(0.0, 2875.0),
+        Point2D::new(12857.0, 2875.0),
+        80.0,
+    );
+    let w_e = Wall::new(
+        Point2D::new(0.0, 8957.0),
+        Point2D::new(6523.0, 8957.0),
+        80.0,
+    );
+    let w_e2 = Wall::new(
+        Point2D::new(6523.0, 8957.0),
+        Point2D::new(12857.0, 8957.0),
+        80.0,
+    );
 
     f1.walls = vec![ws, wn, ww, we, w_b, w_f, w_e, w_e2];
 
     // 開口
-    f1.openings.push(Opening::window(ws_id, 3000.0, 3600.0, 2000.0, 400.0));
-    f1.openings.push(Opening::window(ws_id, 9000.0, 2400.0, 1200.0, 800.0));
-    f1.openings.push(Opening::window(wn_id, 3000.0, 1600.0, 1200.0, 800.0));
-    f1.openings.push(Opening::window(wn_id, 9000.0, 1600.0, 1200.0, 800.0));
-    f1.openings.push(Opening::door(ww_id, 5000.0, 900.0, 2100.0));
-    f1.openings.push(Opening::window(we_id, 5000.0, 1600.0, 1200.0, 800.0));
+    f1.openings
+        .push(Opening::window(ws_id, 3000.0, 3600.0, 2000.0, 400.0));
+    f1.openings
+        .push(Opening::window(ws_id, 9000.0, 2400.0, 1200.0, 800.0));
+    f1.openings
+        .push(Opening::window(wn_id, 3000.0, 1600.0, 1200.0, 800.0));
+    f1.openings
+        .push(Opening::window(wn_id, 9000.0, 1600.0, 1200.0, 800.0));
+    f1.openings
+        .push(Opening::door(ww_id, 5000.0, 900.0, 2100.0));
+    f1.openings
+        .push(Opening::window(we_id, 5000.0, 1600.0, 1200.0, 800.0));
 
     // 部屋
-    let mut living = Room::new("リビング", vec![
-        Point2D::new(6523.0, 0.0), Point2D::new(12857.0, 0.0),
-        Point2D::new(12857.0, 2875.0), Point2D::new(6523.0, 2875.0),
-    ]);
+    let mut living = Room::new(
+        "リビング",
+        vec![
+            Point2D::new(6523.0, 0.0),
+            Point2D::new(12857.0, 0.0),
+            Point2D::new(12857.0, 2875.0),
+            Point2D::new(6523.0, 2875.0),
+        ],
+    );
     living.has_floor_heating = true;
 
-    let mut dk = Room::new("DK", vec![
-        Point2D::new(0.0, 0.0), Point2D::new(6523.0, 0.0),
-        Point2D::new(6523.0, 2875.0), Point2D::new(0.0, 2875.0),
-    ]);
+    let mut dk = Room::new(
+        "DK",
+        vec![
+            Point2D::new(0.0, 0.0),
+            Point2D::new(6523.0, 0.0),
+            Point2D::new(6523.0, 2875.0),
+            Point2D::new(0.0, 2875.0),
+        ],
+    );
     dk.has_floor_heating = true;
 
-    let mut main_room = Room::new("メインルーム", vec![
-        Point2D::new(0.0, 2875.0), Point2D::new(12857.0, 2875.0),
-        Point2D::new(12857.0, 8957.0), Point2D::new(0.0, 8957.0),
-    ]);
+    let mut main_room = Room::new(
+        "メインルーム",
+        vec![
+            Point2D::new(0.0, 2875.0),
+            Point2D::new(12857.0, 2875.0),
+            Point2D::new(12857.0, 8957.0),
+            Point2D::new(0.0, 8957.0),
+        ],
+    );
     main_room.has_floor_heating = true;
 
-    let utility = Room::new("ユーティリティ", vec![
-        Point2D::new(0.0, 8957.0), Point2D::new(6523.0, 8957.0),
-        Point2D::new(6523.0, 10680.0), Point2D::new(0.0, 10680.0),
-    ]);
+    let utility = Room::new(
+        "ユーティリティ",
+        vec![
+            Point2D::new(0.0, 8957.0),
+            Point2D::new(6523.0, 8957.0),
+            Point2D::new(6523.0, 10680.0),
+            Point2D::new(0.0, 10680.0),
+        ],
+    );
 
-    let bedroom = Room::new("寝室", vec![
-        Point2D::new(6523.0, 8957.0), Point2D::new(12857.0, 8957.0),
-        Point2D::new(12857.0, 10680.0), Point2D::new(6523.0, 10680.0),
-    ]);
+    let bedroom = Room::new(
+        "寝室",
+        vec![
+            Point2D::new(6523.0, 8957.0),
+            Point2D::new(12857.0, 8957.0),
+            Point2D::new(12857.0, 10680.0),
+            Point2D::new(6523.0, 10680.0),
+        ],
+    );
 
     f1.rooms = vec![living, dk, main_room, utility, bedroom];
     bldg.add_floor(f1);

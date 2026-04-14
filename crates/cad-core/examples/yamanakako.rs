@@ -29,11 +29,7 @@ fn main() {
 
     // --- 外壁 ---
     // 南壁 (G 通り)
-    let mut wall_s = Wall::new(
-        Point2D::new(0.0, 0.0),
-        Point2D::new(12857.0, 0.0),
-        150.0,
-    );
+    let mut wall_s = Wall::new(Point2D::new(0.0, 0.0), Point2D::new(12857.0, 0.0), 150.0);
     wall_s.is_exterior = true;
     wall_s.material = WallMaterial::Wood;
     wall_s.finish_exterior = Some("サイディング".into());
@@ -52,11 +48,7 @@ fn main() {
     let wall_n_id = wall_n.id;
 
     // 西壁 (C 通り)
-    let mut wall_w = Wall::new(
-        Point2D::new(0.0, 0.0),
-        Point2D::new(0.0, 10680.0),
-        150.0,
-    );
+    let mut wall_w = Wall::new(Point2D::new(0.0, 0.0), Point2D::new(0.0, 10680.0), 150.0);
     wall_w.is_exterior = true;
     wall_w.material = WallMaterial::Wood;
     let wall_w_id = wall_w.id;
@@ -101,16 +93,29 @@ fn main() {
     );
     wall_fp.height = Some(500.0);
 
-    f1.walls = vec![wall_s, wall_n, wall_w, wall_e, wall_b, wall_e_inner, wall_f, wall_fp];
+    f1.walls = vec![
+        wall_s,
+        wall_n,
+        wall_w,
+        wall_e,
+        wall_b,
+        wall_e_inner,
+        wall_f,
+        wall_fp,
+    ];
 
     // --- 開口部 ---
     // 南壁の窓（リビング大開口）
-    f1.openings.push(Opening::window(wall_s_id, 3000.0, 3600.0, 2000.0, 400.0));
-    f1.openings.push(Opening::window(wall_s_id, 8000.0, 2400.0, 1200.0, 800.0));
+    f1.openings
+        .push(Opening::window(wall_s_id, 3000.0, 3600.0, 2000.0, 400.0));
+    f1.openings
+        .push(Opening::window(wall_s_id, 8000.0, 2400.0, 1200.0, 800.0));
 
     // 北壁の窓
-    f1.openings.push(Opening::window(wall_n_id, 2000.0, 1600.0, 1200.0, 800.0));
-    f1.openings.push(Opening::window(wall_n_id, 8000.0, 1600.0, 1200.0, 800.0));
+    f1.openings
+        .push(Opening::window(wall_n_id, 2000.0, 1600.0, 1200.0, 800.0));
+    f1.openings
+        .push(Opening::window(wall_n_id, 8000.0, 1600.0, 1200.0, 800.0));
 
     // 西壁の玄関ドア
     let mut entrance = Opening::door(wall_w_id, 5000.0, 900.0, 2100.0);
@@ -118,7 +123,8 @@ fn main() {
     f1.openings.push(entrance);
 
     // 東壁の窓
-    f1.openings.push(Opening::window(wall_e_id, 5000.0, 1600.0, 1200.0, 800.0));
+    f1.openings
+        .push(Opening::window(wall_e_id, 5000.0, 1600.0, 1200.0, 800.0));
 
     // --- 部屋 ---
     // リビング (B-A × F-G)
@@ -203,20 +209,33 @@ fn main() {
 
     // 階情報
     for floor in &bldg.floors {
-        println!("\n{} (FL+{:.0}mm, CH={:.0}mm):", floor.name, floor.level, floor.ceiling_height);
+        println!(
+            "\n{} (FL+{:.0}mm, CH={:.0}mm):",
+            floor.name, floor.level, floor.ceiling_height
+        );
         println!("  壁: {} 本", floor.walls.len());
         println!("  開口: {} 箇所", floor.openings.len());
         println!("  部屋: {} 室", floor.rooms.len());
 
         let ext_walls: Vec<_> = floor.walls.iter().filter(|w| w.is_exterior).collect();
         let int_walls: Vec<_> = floor.walls.iter().filter(|w| !w.is_exterior).collect();
-        println!("    外壁: {} 本 (総長 {:.1}m)", ext_walls.len(),
-            ext_walls.iter().map(|w| w.length()).sum::<f64>() / 1000.0);
-        println!("    内壁: {} 本 (総長 {:.1}m)", int_walls.len(),
-            int_walls.iter().map(|w| w.length()).sum::<f64>() / 1000.0);
+        println!(
+            "    外壁: {} 本 (総長 {:.1}m)",
+            ext_walls.len(),
+            ext_walls.iter().map(|w| w.length()).sum::<f64>() / 1000.0
+        );
+        println!(
+            "    内壁: {} 本 (総長 {:.1}m)",
+            int_walls.len(),
+            int_walls.iter().map(|w| w.length()).sum::<f64>() / 1000.0
+        );
 
         for room in &floor.rooms {
-            let heating = if room.has_floor_heating { " [床暖房]" } else { "" };
+            let heating = if room.has_floor_heating {
+                " [床暖房]"
+            } else {
+                ""
+            };
             println!("    {} — {:.1}sqm{}", room.name, room.area(), heating);
         }
 
@@ -228,5 +247,8 @@ fn main() {
     // JSON 出力
     let json = serde_json::to_string_pretty(&bldg).unwrap();
     std::fs::write("/tmp/yamanakako-b1.json", &json).unwrap();
-    println!("\nJSON saved to /tmp/yamanakako-b1.json ({} bytes)", json.len());
+    println!(
+        "\nJSON saved to /tmp/yamanakako-b1.json ({} bytes)",
+        json.len()
+    );
 }
