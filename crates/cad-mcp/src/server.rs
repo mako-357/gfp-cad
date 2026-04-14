@@ -9,7 +9,7 @@ use rmcp::model::{ServerCapabilities, ServerInfo};
 use rmcp::{schemars, tool, tool_handler, tool_router, ServerHandler};
 use schemars::JsonSchema;
 use serde::Deserialize;
-use surrealdb::RecordId;
+use surrealdb::types::RecordId;
 
 #[derive(Clone)]
 pub struct GfpCadMcpServer {

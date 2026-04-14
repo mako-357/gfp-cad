@@ -1,19 +1,19 @@
 use serde::{Deserialize, Serialize};
-use surrealdb::RecordId;
+use surrealdb::types::{RecordId, SurrealValue};
 
-/// ユーザー
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, SurrealValue)]
 pub struct User {
     pub id: Option<RecordId>,
     pub email: String,
     pub name: Option<String>,
     pub picture: Option<String>,
-    pub created_at: Option<String>,
-    pub last_login_at: Option<String>,
+    #[serde(default)]
+    pub created_at: Option<serde_json::Value>,
+    #[serde(default)]
+    pub last_login_at: Option<serde_json::Value>,
 }
 
-/// 認証アイデンティティ
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, SurrealValue)]
 pub struct AuthIdentity {
     pub id: Option<RecordId>,
     pub user_id: Option<RecordId>,
@@ -22,42 +22,44 @@ pub struct AuthIdentity {
     pub source: String,
 }
 
-/// ワークスペース
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, SurrealValue)]
 pub struct Workspace {
     pub id: Option<RecordId>,
     pub name: String,
     pub owner_id: Option<RecordId>,
-    pub created_at: Option<String>,
+    #[serde(default)]
+    pub created_at: Option<serde_json::Value>,
 }
 
-/// プロジェクト
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, SurrealValue)]
 pub struct Project {
     pub id: Option<RecordId>,
     pub name: String,
     pub workspace_id: Option<RecordId>,
     pub created_by: Option<RecordId>,
-    pub created_at: Option<String>,
+    #[serde(default)]
+    pub created_at: Option<serde_json::Value>,
 }
 
-/// 建物レコード（DB 保存用）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, SurrealValue)]
 pub struct BuildingRecord {
     pub id: Option<RecordId>,
     pub project_id: Option<RecordId>,
     pub name: String,
     pub data: serde_json::Value,
     pub created_by: Option<RecordId>,
-    pub created_at: Option<String>,
-    pub updated_at: Option<String>,
+    #[serde(default)]
+    pub created_at: Option<serde_json::Value>,
+    #[serde(default)]
+    pub updated_at: Option<serde_json::Value>,
 }
 
-/// 建物サマリ（一覧用）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, SurrealValue)]
 pub struct BuildingSummary {
     pub id: Option<RecordId>,
     pub name: String,
-    pub created_at: Option<String>,
-    pub updated_at: Option<String>,
+    #[serde(default)]
+    pub created_at: Option<serde_json::Value>,
+    #[serde(default)]
+    pub updated_at: Option<serde_json::Value>,
 }

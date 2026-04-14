@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use surrealdb::Surreal;
-use surrealdb::engine::remote::ws::{Client, Ws};
+use surrealdb::engine::remote::http::{Client, Http};
 
 use crate::config::DbConfig;
 
@@ -10,16 +10,23 @@ pub struct CadDbClient {
 }
 
 impl CadDbClient {
-    /// 接続して初期化
+    /// 接続して初期化（HTTP プロトコル）
     pub async fn connect(config: &DbConfig) -> Result<Self> {
-        let db = Surreal::new::<Ws>(&config.url)
+        // SDK は scheme を自前で付加するので、ホスト:ポートだけ渡す
+        let url = config.url
+            .replace("ws://", "")
+            .replace("wss://", "")
+            .replace("http://", "")
+            .replace("https://", "");
+
+        let db = Surreal::new::<Http>(&url)
             .await
             .context("SurrealDB 接続失敗")?;
 
         db.signin(surrealdb::opt::auth::Namespace {
-            namespace: &config.namespace,
-            username: &config.username,
-            password: &config.password,
+            namespace: config.namespace.clone(),
+            username: config.username.clone(),
+            password: config.password.clone(),
         })
         .await
         .context("SurrealDB 認証失敗")?;
@@ -31,7 +38,7 @@ impl CadDbClient {
 
         tracing::info!(
             "SurrealDB connected: {}/{}/{}",
-            config.url,
+            url,
             config.namespace,
             config.database
         );

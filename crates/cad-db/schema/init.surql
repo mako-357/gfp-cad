@@ -58,7 +58,7 @@ DEFINE INDEX ws_name_idx ON projects FIELDS workspace_id, name UNIQUE;
 DEFINE TABLE buildings SCHEMAFULL;
 DEFINE FIELD project_id ON buildings TYPE record<projects>;
 DEFINE FIELD name ON buildings TYPE string;
-DEFINE FIELD data ON buildings TYPE object;
+DEFINE FIELD data ON buildings TYPE object FLEXIBLE;
 DEFINE FIELD created_by ON buildings TYPE record<users>;
 DEFINE FIELD created_at ON buildings TYPE datetime DEFAULT time::now()
   VALUE $before OR time::now();

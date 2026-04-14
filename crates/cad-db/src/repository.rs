@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use cad_core::Building;
-use surrealdb::RecordId;
+use surrealdb::types::RecordId;
 
 use crate::client::CadDbClient;
 use crate::models::*;
@@ -102,7 +102,7 @@ impl CadDbClient {
         };
         let mut result = self
             .db
-            .query("SELECT * FROM workspaces WHERE id IN (SELECT out FROM workspace_member WHERE in = $uid)")
+            .query("SELECT * FROM workspaces WHERE id IN (SELECT VALUE out FROM workspace_member WHERE `in` = $uid)")
             .bind(("uid", uid.clone()))
             .await?;
         let workspaces: Vec<Workspace> = result.take(0)?;

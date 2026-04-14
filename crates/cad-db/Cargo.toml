@@ -11,5 +11,5 @@ uuid = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-surrealdb = { version = "2", features = ["protocol-ws"] }
+surrealdb = { version = "3", features = ["protocol-http"] }
 tokio = { version = "1", features = ["full"] }
