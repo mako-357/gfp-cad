@@ -6,9 +6,10 @@
 //   - crates/cad-mcp/src/generated/manifest.rs
 //       = (tool 名, params 型, description, group) の一覧(将来の tool_router 生成の土台)
 //
-// 生成は `cargo test -p cad-mcp --test tools_codegen` で走り、生成物が最新でなければ
-// テストが落ちる(再生成を強制)。unison-protocol 方式(club-kdl を SSOT parser に、
-// VP-local な emit で Rust を吐く)を cad に適用した第一手。
+// 再生成は `cargo run -p cad-mcp-codegen`。`cargo test -p cad-mcp-codegen` の freshness
+// テストが「生成物の最新性」と「server.rs の #[tool] 表面が KDL と一致」を検証する
+// (どちらか崩れると CI が落ちる)。unison-protocol 方式(club-kdl を SSOT parser に、
+// ローカル emit で Rust を吐く)を cad に適用した第一手。
 //
 // transparent migration: 生成 param 構造体は現行の手書き Input 構造体と
 // フィールド・型・順序・省略性を逐語一致させる(JsonSchema を移行前後で不変に保つ)。

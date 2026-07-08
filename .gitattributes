@@ -1,0 +1,4 @@
+# 生成コードと SSOT は LF 固定（codegen は常に \n を出力するため、CRLF チェックアウトで
+# freshness テストが誤検出するのを防ぐ）。
+crates/cad-mcp/src/generated/*.rs text eol=lf
+crates/cad-mcp/schema/*.kdl        text eol=lf

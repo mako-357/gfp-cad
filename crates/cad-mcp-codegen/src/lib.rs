@@ -156,7 +156,92 @@ pub fn parse(src: &str) -> Result<Schema> {
         }
     }
 
+    validate(&records, &tools)?;
     Ok(Schema { records, tools })
+}
+
+/// 参照・識別子整合の検証（Windows でも semantic な壊れを検出できるように、
+/// text-freshness だけでなくここで弾く）。
+fn validate(records: &[Record], tools: &[ToolDef]) -> Result<()> {
+    use std::collections::HashSet;
+    let names: HashSet<&str> = records.iter().map(|r| r.name.as_str()).collect();
+    if names.len() != records.len() {
+        bail!("record 名が重複しています");
+    }
+    for r in records {
+        for f in &r.fields {
+            if !is_ident(&f.name) {
+                bail!(
+                    "record {:?} の field 名が不正な識別子: {:?}",
+                    r.name,
+                    f.name
+                );
+            }
+            // array<Inner> の要素型は定義済み record でなければならない。
+            if let Some(inner) = f.ty.strip_prefix("Vec<").and_then(|s| s.strip_suffix('>'))
+                && !names.contains(inner)
+            {
+                bail!(
+                    "record {:?} field {:?}: 配列要素型 {:?} が未定義",
+                    r.name,
+                    f.name,
+                    inner
+                );
+            }
+        }
+    }
+    for t in tools {
+        if !is_ident(&t.name) {
+            bail!("tool 名が不正な識別子: {:?}", t.name);
+        }
+        if !names.contains(t.params.as_str()) {
+            bail!(
+                "tool {:?}: params 型 {:?} が未定義 record",
+                t.name,
+                t.params
+            );
+        }
+    }
+    Ok(())
+}
+
+fn is_ident(s: &str) -> bool {
+    let mut cs = s.chars();
+    matches!(cs.next(), Some(c) if c == '_' || c.is_ascii_alphabetic())
+        && s.chars().all(|c| c == '_' || c.is_ascii_alphanumeric())
+}
+
+/// server.rs のテキストから `#[tool(name = "..", description = "..")]` を抽出する。
+/// KDL(SSOT)の tool 表面と server.rs の実 router が乖離していないかを
+/// [`crate`] の test が突き合わせるのに使う（description の二重管理 drift を防ぐ）。
+pub fn parse_server_tools(src: &str) -> Result<Vec<(String, String)>> {
+    // `#[tool(` のみ対象（`#[tool_router]` / `#[tool_handler]` は括弧が無いので除外）。
+    let mut out = Vec::new();
+    let mut rest = src;
+    while let Some(i) = rest.find("#[tool(") {
+        rest = &rest[i + "#[tool(".len()..];
+        let end = rest.find(")]").context("#[tool(...)] の閉じ `)]` が無い")?;
+        let attr = &rest[..end];
+        rest = &rest[end + 2..];
+        let name =
+            attr_str(attr, "name").with_context(|| format!("#[tool] に name が無い: {attr:?}"))?;
+        let desc = attr_str(attr, "description")
+            .with_context(|| format!("#[tool] に description が無い: {attr:?}"))?;
+        out.push((name, desc));
+    }
+    Ok(out)
+}
+
+/// `key = "value"` の value を取り出す（value 内に `"` は含まれない前提）。
+fn attr_str(attr: &str, key: &str) -> Option<String> {
+    let i = attr.find(key)?;
+    let after = &attr[i + key.len()..];
+    let eq = after.find('=')?;
+    let after_eq = &after[eq + 1..];
+    let open = after_eq.find('"')? + 1;
+    let body = &after_eq[open..];
+    let close = body.find('"')?;
+    Some(body[..close].to_string())
 }
 
 // =============================================================================
@@ -173,8 +258,11 @@ fn rust_str(s: &str) -> String {
 pub fn emit_params(schema: &Schema) -> String {
     let mut out = String::new();
     out.push_str(HEADER);
-    // schemars は rmcp(1.8)と同じ 1.x に Cargo.toml で統一済み → bare の `use schemars`
-    // で rmcp tool の trait 境界 `rmcp::schemars::JsonSchema`(同一 crate)を満たす。
+    // schemars は rmcp 2 が使う 1.x に Cargo.toml で統一済み → bare の `use schemars`
+    // で rmcp tool の trait 境界 `rmcp::schemars::JsonSchema`(同一 crate)を満たす
+    // (rmcp 自身も内部で bare `use schemars::JsonSchema` を使う)。将来 rmcp が
+    // schemars を別 major に上げた場合は「同一 crate でない」loud なコンパイルエラーで
+    // 検出できる(silent drift ではない)。
     out.push_str("\nuse schemars::JsonSchema;\nuse serde::Deserialize;\n");
     for r in &schema.records {
         out.push_str("\n#[derive(Debug, Deserialize, JsonSchema)]\n");

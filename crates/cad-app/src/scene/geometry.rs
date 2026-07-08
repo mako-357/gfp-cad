@@ -19,7 +19,7 @@ pub fn build_overlay(floor: &Floor, sel: Selection) -> Geo {
     match sel {
         Selection::Wall(id) => {
             if let Some(w) = floor.walls.iter().find(|w| w.id == id) {
-                wall_rect(&mut g, w, config::SEL);
+                wall_rect(&mut g, w, &floor.walls, config::SEL);
             }
         }
         Selection::Opening(id) => {
@@ -51,10 +51,10 @@ pub fn build(building: &Building, floor_idx: usize) -> Geo {
         // interior wall's mitre extension into an exterior wall at a T-junction is
         // painted over cleanly.
         for wall in floor.walls.iter().filter(|w| !w.is_exterior) {
-            wall_body(&mut g, wall);
+            wall_body(&mut g, wall, &floor.walls);
         }
         for wall in floor.walls.iter().filter(|w| w.is_exterior) {
-            wall_body(&mut g, wall);
+            wall_body(&mut g, wall, &floor.walls);
         }
         for opening in &floor.openings {
             opening_mark(&mut g, floor, opening);
@@ -85,20 +85,22 @@ fn grid(g: &mut Geo, building: &Building, bbox: [f64; 4]) {
     }
 }
 
-fn wall_body(g: &mut Geo, wall: &Wall) {
+fn wall_body(g: &mut Geo, wall: &Wall, walls: &[Wall]) {
     let color = if wall.is_exterior {
         config::WALL_EXT
     } else {
         config::WALL_INT
     };
-    wall_rect(g, wall, color);
+    wall_rect(g, wall, walls, color);
 }
 
-/// Push a wall's face rectangle in `color`, extended by half-thickness at each
-/// end along the centreline so orthogonal corners mitre cleanly instead of
-/// leaving a notch. This extension is render-only — the exact face
-/// (`Wall::face_quad`) is what DXF/AutoCAD export use.
-fn wall_rect(g: &mut Geo, wall: &Wall, color: u32) {
+/// Push a wall's face rectangle in `color`. An end is extended by half-thickness
+/// along the centreline **only where another wall shares that endpoint** (an
+/// L-corner) so orthogonal corners mitre cleanly; a free end keeps its exact
+/// length (no stub), and a T-junction end (which meets another wall's *span*,
+/// not its endpoint) is not extended (so it can't poke through the shell).
+/// Render-only — the exact face (`Wall::face_quad`) is what DXF/AutoCAD use.
+fn wall_rect(g: &mut Geo, wall: &Wall, walls: &[Wall], color: u32) {
     let dx = wall.end.x - wall.start.x;
     let dy = wall.end.y - wall.start.y;
     let len = (dx * dx + dy * dy).sqrt();
@@ -108,11 +110,20 @@ fn wall_rect(g: &mut Geo, wall: &Wall, color: u32) {
     let t = wall.thickness / 2.0;
     let (ux, uy) = (dx / len, dy / len); // along centreline
     let (nx, ny) = (-uy * t, ux * t); // perpendicular, half-thickness
-    // Extend the endpoints outward by half-thickness.
-    let sx = wall.start.x - ux * t;
-    let sy = wall.start.y - uy * t;
-    let ex = wall.end.x + ux * t;
-    let ey = wall.end.y + uy * t;
+    let ext_s = if shares_endpoint(walls, wall, wall.start) {
+        t
+    } else {
+        0.0
+    };
+    let ext_e = if shares_endpoint(walls, wall, wall.end) {
+        t
+    } else {
+        0.0
+    };
+    let sx = wall.start.x - ux * ext_s;
+    let sy = wall.start.y - uy * ext_s;
+    let ex = wall.end.x + ux * ext_e;
+    let ey = wall.end.y + uy * ext_e;
     push_quad(
         g,
         [
@@ -123,6 +134,14 @@ fn wall_rect(g: &mut Geo, wall: &Wall, color: u32) {
         ],
         color,
     );
+}
+
+/// True if any *other* wall has an endpoint coincident with `p` (~1mm).
+fn shares_endpoint(walls: &[Wall], wall: &Wall, p: cad_core::Point2D) -> bool {
+    let near = |a: cad_core::Point2D| (a.x - p.x).abs() < 1.0 && (a.y - p.y).abs() < 1.0;
+    walls
+        .iter()
+        .any(|w| w.id != wall.id && (near(w.start) || near(w.end)))
 }
 
 fn opening_mark(g: &mut Geo, floor: &Floor, opening: &Opening) {
