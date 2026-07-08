@@ -29,9 +29,9 @@ pub fn build_overlay(floor: &Floor, sel: Selection) -> Geo {
         }
         Selection::Room(id) => {
             if let Some(r) = floor.rooms.iter().find(|r| r.id == id)
-                && let Some(poly) = floor.room_boundary(r)
+                && let Some(face) = floor.face_at(r.seed)
             {
-                fill_polygon(&mut g, &poly, config::SEL);
+                fill_face(&mut g, &face, config::SEL); // 穴も切り抜く（塗りと一致）
             }
         }
         Selection::None => {}
@@ -195,13 +195,6 @@ fn fill_face(g: &mut Geo, face: &cad_core::Face, color: u32) {
     for hole in &face.holes {
         add_ring(&mut builder, hole);
     }
-    fill_built(g, builder.build(), color);
-}
-
-/// Fill an arbitrary (possibly concave) polygon via lyon (no holes).
-fn fill_polygon(g: &mut Geo, boundary: &[cad_core::Point2D], color: u32) {
-    let mut builder = Path::builder();
-    add_ring(&mut builder, boundary);
     fill_built(g, builder.build(), color);
 }
 

@@ -173,6 +173,65 @@ fn nested_room_subtracts_hole() {
 }
 
 #[test]
+fn two_disconnected_buildings_no_negative_area() {
+    // 離れた2棟（各5000×4000=20㎡、各々を仕切りで2室に）。各成分の外周が「穴」と
+    // 誤帰属され負面積になっていた回帰。全室が正で総和は 4×10=40㎡。
+    let mut floor = Floor::new("1F", 0.0, 3000.0);
+    for base in [0.0, 20000.0] {
+        let (x0, x1, xm) = (base, base + 5000.0, base + 2500.0);
+        for (a, b) in [
+            ((x0, 0.0), (x1, 0.0)),
+            ((x1, 0.0), (x1, 4000.0)),
+            ((x1, 4000.0), (x0, 4000.0)),
+            ((x0, 4000.0), (x0, 0.0)),
+            ((xm, 0.0), (xm, 4000.0)), // 仕切り
+        ] {
+            floor.add_wall(Point2D::new(a.0, a.1), Point2D::new(b.0, b.1), 100.0);
+        }
+        floor
+            .rooms
+            .push(Room::new("L", Point2D::new(base + 1250.0, 2000.0)));
+        floor
+            .rooms
+            .push(Room::new("R", Point2D::new(base + 3750.0, 2000.0)));
+    }
+    for r in &floor.rooms {
+        let a = floor.room_area(r).expect("enclosed");
+        assert!(a > 0.0, "室 {} が負/0: {a}", r.name);
+        assert!((a - 10.0).abs() < 0.2, "各室 2500×4000=10㎡, got {a}");
+    }
+    assert!((floor.area() - 40.0).abs() < 0.2, "総和 40㎡");
+}
+
+#[test]
+fn three_level_nesting_areas() {
+    // 同心の3矩形（非連結）: 外100 / 中36 / 内4 ㎡。
+    // hall=100-36=64、middle=36-4=32、inner=4、総和=100（footprint）。
+    let mut floor = Floor::new("1F", 0.0, 3000.0);
+    let mut square = |x0: f64, y0: f64, s: f64| {
+        for (a, b) in [
+            ((x0, y0), (x0 + s, y0)),
+            ((x0 + s, y0), (x0 + s, y0 + s)),
+            ((x0 + s, y0 + s), (x0, y0 + s)),
+            ((x0, y0 + s), (x0, y0)),
+        ] {
+            floor.add_wall(Point2D::new(a.0, a.1), Point2D::new(b.0, b.1), 50.0);
+        }
+    };
+    square(0.0, 0.0, 10000.0); // 100㎡
+    square(2000.0, 2000.0, 6000.0); // 36㎡
+    square(4000.0, 4000.0, 2000.0); // 4㎡
+    let hall = Room::new("hall", Point2D::new(500.0, 500.0)); // 外と中の間
+    let middle = Room::new("middle", Point2D::new(2500.0, 2500.0)); // 中と内の間
+    let inner = Room::new("inner", Point2D::new(5000.0, 5000.0)); // 最内
+    assert!((floor.room_area(&hall).unwrap() - 64.0).abs() < 0.2);
+    assert!((floor.room_area(&middle).unwrap() - 32.0).abs() < 0.2);
+    assert!((floor.room_area(&inner).unwrap() - 4.0).abs() < 0.2);
+    floor.rooms.extend([hall, middle, inner]);
+    assert!((floor.area() - 100.0).abs() < 0.3, "footprint 100㎡");
+}
+
+#[test]
 fn duplicate_seed_counts_area_once() {
     // 5000×4000=20㎡ の1部屋に2シード → 面積は1回だけ計上、validate が競合を検出。
     let mut floor = Floor::new("1F", 0.0, 3000.0);

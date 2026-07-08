@@ -60,10 +60,12 @@ pub fn pick(floor: &Floor, world: [f64; 2], tol: f64) -> Selection {
         }
     }
     // 面は1回だけ導出。クリックを含む**最小**面の部屋を選ぶ（穴の内側の部屋が外側に勝つ）。
+    // 穴の内部はその面に含めない（塗り・面積と一致）。
     let mut best: Option<(Selection, f64)> = None;
     for (r, face) in floor.rooms_faces() {
         if let Some(f) = face
             && point_in_polygon(world, &f.polygon)
+            && !f.holes.iter().any(|h| point_in_polygon(world, h))
             && best.as_ref().is_none_or(|(_, a)| f.area < *a)
         {
             best = Some((Selection::Room(r.id), f.area));

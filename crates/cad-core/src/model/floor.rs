@@ -221,9 +221,20 @@ impl Floor {
             }
         }
 
-        // 接合し損ね: 端点が別壁スパンに許容超〜10倍で近接（planarize で繋がらない）。
+        // 接合し損ね: **宙ぶらり(degree 1)** の端点が別壁スパンに許容超〜10倍で近接
+        // （planarize で繋がらない失敗 T字）。共有コーナー（意図的な二重壁・空洞壁の端）は
+        // degree≥2 なので誤検出しない。
+        let degree = |id: NodeId| -> usize {
+            self.walls
+                .iter()
+                .filter(|w| w.start == id || w.end == id)
+                .count()
+        };
         for w in &self.walls {
             for ep in [w.start, w.end] {
+                if degree(ep) != 1 {
+                    continue; // 宙ぶらりの端だけを対象に
+                }
                 let Some(p) = self.node_point(ep) else {
                     continue;
                 };
@@ -295,10 +306,11 @@ fn face_key(f: &crate::Face) -> Vec<NodeId> {
 }
 
 /// 点を含む最小の有界面を（事前計算済みの faces から）選ぶ。入れ子時は内側を採る。
+/// 穴の内部は「含まない」（穴には別の面が張られているか、無ければ未囲い扱い）。
 fn resolve_seed(faces: &[crate::Face], seed: Point2D) -> Option<crate::Face> {
     faces
         .iter()
-        .filter(|f| crate::topology::point_in_polygon(seed, &f.polygon))
+        .filter(|f| crate::topology::face_contains(f, seed))
         .min_by(|a, b| a.area.total_cmp(&b.area))
         .cloned()
 }

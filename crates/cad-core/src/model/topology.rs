@@ -198,10 +198,13 @@ pub fn faces(nodes: &[Node], walls: &[Wall], tol: f64) -> Vec<Face> {
     }
 
     // --- 4. 有界面 + 穴の関連付け ---
-    // 有界面 = CCW(正)。CW(負)サイクルは (a) 全体の外周を CW で見た**非有界面**が1つと、
+    // 有界面 = CCW(正)。CW(負)サイクルは (a) 各連結成分の外周を CW で見た**外側境界**と、
     // (b) 非連結の内側ループ（浮いたクローゼット等）の外周 = **穴** から成る。
-    // 非有界面は必ず |面積| 最大なので除外し、残る負サイクルを穴として最小の**別の**
-    // 有界面（自身の裏返し＝同一ノード集合の面は除く）へ割り当てて差し引く。
+    //
+    // 各負サイクルを「代表点を含み、かつ **面積が |穴| より真に大きい**（＝真に囲む親）
+    // 最小の正面」へ穴として割り当てて差し引く。該当する親が無ければ、それは連結成分の
+    // 外側境界（非有界）なので捨てる。この規則は非連結成分が複数あっても（各成分の外周は
+    // より大きい親を持たず捨てられる）、多階層ネストでも（各穴が1つ上の親に付く）正しい。
     const EPS: f64 = 1.0;
     let mut faces: Vec<Face> = cycles
         .iter()
@@ -213,48 +216,60 @@ pub fn faces(nodes: &[Node], walls: &[Wall], tol: f64) -> Vec<Face> {
             area: c.area,
         })
         .collect();
-    let mut negatives: Vec<&Cycle> = cycles.iter().filter(|c| c.area < -EPS).collect();
-    // 非有界面（|面積|最大）を除外。
-    if let Some(outer) = negatives
-        .iter()
-        .enumerate()
-        .max_by(|a, b| a.1.area.abs().total_cmp(&b.1.area.abs()))
-        .map(|(i, _)| i)
-    {
-        negatives.swap_remove(outer);
-    }
-    for c in negatives {
-        let hole_set: std::collections::BTreeSet<NodeId> = c.nodes.iter().copied().collect();
-        let rep = centroid(&c.polygon);
+    for c in cycles.iter().filter(|c| c.area < -EPS) {
+        let hole_area = c.area.abs();
+        let rep = interior_point(&c.polygon);
         if let Some(idx) = faces
             .iter()
             .enumerate()
             .filter(|(_, f)| {
-                f.polygon.len() >= 3
+                f.area > hole_area + EPS // 真に囲む親（|穴| より大きい面）だけ
+                    && f.polygon.len() >= 3
                     && point_in_polygon(rep, &f.polygon)
-                    && f.nodes
-                        .iter()
-                        .copied()
-                        .collect::<std::collections::BTreeSet<_>>()
-                        != hole_set
             })
             .min_by(|a, b| a.1.area.total_cmp(&b.1.area))
             .map(|(i, _)| i)
         {
-            faces[idx].area -= c.area.abs();
+            faces[idx].area -= hole_area;
             faces[idx].holes.push(c.polygon.clone());
         }
+        // 親が無ければ連結成分の外周（非有界）→ 捨てる。
     }
     faces
 }
 
-/// ポリゴン頂点の重心（穴の代表内部点として使う。単純多角形を想定）。
-fn centroid(poly: &[Point2D]) -> Point2D {
-    let n = poly.len().max(1) as f64;
-    let (sx, sy) = poly
-        .iter()
-        .fold((0.0, 0.0), |(sx, sy), p| (sx + p.x, sy + p.y));
-    Point2D::new(sx / n, sy / n)
+/// 単純多角形の**内部が保証された1点**。頂点重心が内部ならそれを、外（凹形状）なら
+/// 重心の y を通る水平走査線で最初の内部スパンの中点を返す（穴の親判定の代表点に使う）。
+fn interior_point(poly: &[Point2D]) -> Point2D {
+    let n = poly.len();
+    let c = {
+        let (sx, sy) = poly
+            .iter()
+            .fold((0.0, 0.0), |(sx, sy), p| (sx + p.x, sy + p.y));
+        Point2D::new(sx / n.max(1) as f64, sy / n.max(1) as f64)
+    };
+    if n < 3 || point_in_polygon(c, poly) {
+        return c;
+    }
+    let y = c.y;
+    let mut xs: Vec<f64> = Vec::new();
+    for i in 0..n {
+        let (a, b) = (poly[i], poly[(i + 1) % n]);
+        if (a.y > y) != (b.y > y) {
+            xs.push(a.x + (y - a.y) / (b.y - a.y) * (b.x - a.x));
+        }
+    }
+    xs.sort_by(f64::total_cmp);
+    if xs.len() >= 2 {
+        Point2D::new((xs[0] + xs[1]) / 2.0, y)
+    } else {
+        c
+    }
+}
+
+/// 点が面の内部か（外周に入り、かつどの穴にも入っていない）。
+pub fn face_contains(face: &Face, p: Point2D) -> bool {
+    point_in_polygon(p, &face.polygon) && !face.holes.iter().any(|h| point_in_polygon(p, h))
 }
 
 #[cfg(test)]
