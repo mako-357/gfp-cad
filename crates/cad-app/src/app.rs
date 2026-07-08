@@ -446,7 +446,7 @@ fn inspector_text(floor: &cad_core::Floor, sel: Selection) -> Option<String> {
             let w = floor.walls.iter().find(|w| w.id == id)?;
             Some(format!(
                 "壁\n長さ: {:.0} mm\n厚み: {:.0} mm\n材料: {:?}\n{}",
-                w.length(),
+                floor.wall_length(w).unwrap_or(0.0),
                 w.thickness,
                 w.material,
                 if w.is_exterior { "外壁" } else { "内壁" },

@@ -61,11 +61,7 @@ async fn test_full_workflow() {
     let mut bldg = Building::new("E2E House");
     bldg.grid.x_axes = vec![GridAxis::new("A", 0.0), GridAxis::new("B", 6000.0)];
     let mut floor = Floor::new("1F", 200.0, 3000.0);
-    floor.walls.push(Wall::new(
-        Point2D::new(0.0, 0.0),
-        Point2D::new(6000.0, 0.0),
-        150.0,
-    ));
+    floor.add_wall(Point2D::new(0.0, 0.0), Point2D::new(6000.0, 0.0), 150.0);
     floor.rooms.push(Room::new(
         "リビング",
         vec![

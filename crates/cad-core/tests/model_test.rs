@@ -38,10 +38,14 @@ fn test_grid_system() {
 
 #[test]
 fn test_wall() {
-    let wall = Wall::new(Point2D::new(0.0, 0.0), Point2D::new(6523.0, 0.0), 150.0);
-    assert!((wall.length() - 6523.0).abs() < 0.1);
+    let mut floor = Floor::new("1F", 200.0, 3000.0);
+    floor.add_wall(Point2D::new(0.0, 0.0), Point2D::new(6523.0, 0.0), 150.0);
+    let wall = &floor.walls[0];
+    let length = floor.wall_length(wall).unwrap();
+    assert!((length - 6523.0).abs() < 0.1);
     // 壁面積: 6523mm × 2700mm = 17.61 sqm
-    assert!((wall.area(2700.0) - 17.61).abs() < 0.1);
+    let area = length * 2700.0 / 1_000_000.0;
+    assert!((area - 17.61).abs() < 0.1);
 }
 
 #[test]
@@ -63,12 +67,13 @@ fn test_room_area() {
 
 #[test]
 fn test_opening() {
-    let wall = Wall::new(Point2D::new(0.0, 0.0), Point2D::new(6000.0, 0.0), 150.0);
+    let mut floor = Floor::new("1F", 200.0, 3000.0);
+    let wall_id = floor.add_wall(Point2D::new(0.0, 0.0), Point2D::new(6000.0, 0.0), 150.0);
 
-    let door = Opening::door(wall.id, 1000.0, 900.0, 2100.0);
+    let door = Opening::door(wall_id, 1000.0, 900.0, 2100.0);
     assert_eq!(door.sill_height, 0.0);
 
-    let window = Opening::window(wall.id, 3000.0, 1600.0, 1200.0, 800.0);
+    let window = Opening::window(wall_id, 3000.0, 1600.0, 1200.0, 800.0);
     assert_eq!(window.sill_height, 800.0);
 }
 

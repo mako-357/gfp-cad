@@ -3,7 +3,7 @@
 //! Tools mutate the model only through `Document::edit`, so every action is one
 //! undo step. Live (in-progress) geometry is returned as a preview for the overlay.
 
-use cad_core::{Building, Floor, Opening, Point2D, Room, Wall};
+use cad_core::{Building, Floor, Opening, Point2D, Room};
 
 use crate::document::{Document, Selection};
 
@@ -150,10 +150,8 @@ impl ToolState {
 
 fn add_wall(b: &mut Building, floor_idx: usize, a: [f64; 2], c: [f64; 2]) -> Option<uuid::Uuid> {
     let f = b.floors.get_mut(floor_idx)?;
-    let wall = Wall::new(Point2D::new(a[0], a[1]), Point2D::new(c[0], c[1]), 100.0);
-    let id = wall.id;
-    f.walls.push(wall);
-    Some(id)
+    // Floor::add_wall が端点をノードに解決（一致する既存端点があれば接合）。
+    Some(f.add_wall(Point2D::new(a[0], a[1]), Point2D::new(c[0], c[1]), 100.0))
 }
 
 fn add_room(b: &mut Building, floor_idx: usize, pts: Vec<[f64; 2]>) -> Option<uuid::Uuid> {
@@ -171,14 +169,17 @@ fn add_room(b: &mut Building, floor_idx: usize, pts: Vec<[f64; 2]>) -> Option<uu
 fn nearest_wall(floor: &Floor, p: [f64; 2], max_dist: f64) -> Option<(uuid::Uuid, f64)> {
     let mut best: Option<(uuid::Uuid, f64, f64)> = None; // (id, pos, dist)
     for w in &floor.walls {
-        let (dx, dy) = (w.end.x - w.start.x, w.end.y - w.start.y);
+        let Some((a, b)) = floor.wall_endpoints(w) else {
+            continue;
+        };
+        let (dx, dy) = (b.x - a.x, b.y - a.y);
         let len2 = dx * dx + dy * dy;
         if len2 < 1e-6 {
             continue;
         }
-        let t = ((p[0] - w.start.x) * dx + (p[1] - w.start.y) * dy) / len2;
+        let t = ((p[0] - a.x) * dx + (p[1] - a.y) * dy) / len2;
         let tc = t.clamp(0.0, 1.0);
-        let proj = [w.start.x + dx * tc, w.start.y + dy * tc];
+        let proj = [a.x + dx * tc, a.y + dy * tc];
         let d = dist(p, proj);
         let pos = tc * len2.sqrt();
         if d <= max_dist && best.is_none_or(|(_, _, bd)| d < bd) {

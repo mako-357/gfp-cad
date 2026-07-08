@@ -1,16 +1,19 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::Point2D;
+use crate::{NodeId, Point2D};
 
-/// 壁
+/// 壁。端点は `NodeId` でノードを参照する（座標は持たない）。
+///
+/// 2 枚の壁が同じ端点ノードを共有する = 接合していて構造的に離れない。
+/// 座標が必要な処理（描画・出力・当たり判定）は `Floor` のノード解決経由で行う。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Wall {
     pub id: Uuid,
-    /// 壁芯の始点 (mm)
-    pub start: Point2D,
-    /// 壁芯の終点 (mm)
-    pub end: Point2D,
+    /// 壁芯の始点ノード
+    pub start: NodeId,
+    /// 壁芯の終点ノード
+    pub end: NodeId,
     /// 壁厚 (mm)
     pub thickness: f64,
     /// 壁高 (mm) — None の場合は階高に従う
@@ -43,7 +46,8 @@ pub enum WallMaterial {
 }
 
 impl Wall {
-    pub fn new(start: Point2D, end: Point2D, thickness: f64) -> Self {
+    /// 端点ノードを指定して壁を作る。座標からの生成は `Floor::add_wall` を使う。
+    pub fn new(start: NodeId, end: NodeId, thickness: f64) -> Self {
         Self {
             id: Uuid::now_v7(),
             start,
@@ -56,38 +60,26 @@ impl Wall {
             is_exterior: false,
         }
     }
+}
 
-    /// 壁芯の長さ (mm)
-    pub fn length(&self) -> f64 {
-        self.start.distance_to(&self.end)
+/// 壁芯 `a`→`b` を厚み/2 でオフセットした面の4隅（start±n, end±n, mm）。
+///
+/// 「壁の面とは何か」の唯一の定義。描画(cad-app / cad-acad)と DXF 出力(cad-dxf)は
+/// すべてこれを共有する。退化した壁（長さ≈0）では `None`。
+pub fn face_quad(a: Point2D, b: Point2D, thickness: f64) -> Option<[Point2D; 4]> {
+    let dx = b.x - a.x;
+    let dy = b.y - a.y;
+    let len = (dx * dx + dy * dy).sqrt();
+    if len < 0.1 {
+        return None;
     }
-
-    /// 壁面積 (sqm) — 片面
-    pub fn area(&self, floor_height: f64) -> f64 {
-        let h = self.height.unwrap_or(floor_height);
-        self.length() * h / 1_000_000.0
-    }
-
-    /// 壁芯を厚み分オフセットした面の4隅 (start±n, end±n, mm)。
-    ///
-    /// これが「壁の面とは何か」の唯一の定義。描画(cad-app / cad-acad)と
-    /// DXF 出力(cad-dxf)はすべてこれを共有し、法線式の重複を避ける。
-    /// 退化した壁(長さ≈0)では `None`。
-    pub fn face_quad(&self) -> Option<[Point2D; 4]> {
-        let dx = self.end.x - self.start.x;
-        let dy = self.end.y - self.start.y;
-        let len = (dx * dx + dy * dy).sqrt();
-        if len < 0.1 {
-            return None;
-        }
-        let t = self.thickness / 2.0;
-        let nx = -dy / len * t;
-        let ny = dx / len * t;
-        Some([
-            Point2D::new(self.start.x + nx, self.start.y + ny),
-            Point2D::new(self.end.x + nx, self.end.y + ny),
-            Point2D::new(self.end.x - nx, self.end.y - ny),
-            Point2D::new(self.start.x - nx, self.start.y - ny),
-        ])
-    }
+    let t = thickness / 2.0;
+    let nx = -dy / len * t;
+    let ny = dx / len * t;
+    Some([
+        Point2D::new(a.x + nx, a.y + ny),
+        Point2D::new(b.x + nx, b.y + ny),
+        Point2D::new(b.x - nx, b.y - ny),
+        Point2D::new(a.x - nx, a.y - ny),
+    ])
 }

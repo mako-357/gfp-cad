@@ -201,9 +201,9 @@ impl AcadRenderer {
                 "GFP_WALL"
             };
 
-            // 壁面は cad_core の共有定義(Wall::face_quad)を使う。原点オフセット
+            // 壁面は cad_core の共有定義をノード解決して使う。原点オフセット
             // (ox, oy) は平行移動なので各隅に足すだけでよい。
-            let Some(q) = wall.face_quad() else {
+            let Some(q) = floor.wall_face_quad(wall) else {
                 continue;
             };
             let pts = vec![
@@ -224,9 +224,11 @@ impl AcadRenderer {
         // 開口部を描画（壁上に矩形で表示）
         for opening in &floor.openings {
             // 開口部の壁を探す
-            if let Some(wall) = floor.walls.iter().find(|w| w.id == opening.wall_id) {
-                let s = Point2D::new(ox + wall.start.x, oy + wall.start.y);
-                let e = Point2D::new(ox + wall.end.x, oy + wall.end.y);
+            if let Some(wall) = floor.walls.iter().find(|w| w.id == opening.wall_id)
+                && let Some((wa, wb)) = floor.wall_endpoints(wall)
+            {
+                let s = Point2D::new(ox + wa.x, oy + wa.y);
+                let e = Point2D::new(ox + wb.x, oy + wb.y);
                 let dx = e.x - s.x;
                 let dy = e.y - s.y;
                 let len = (dx * dx + dy * dy).sqrt();

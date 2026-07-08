@@ -29,80 +29,79 @@ fn main() {
 
     // --- 外壁 ---
     // 南壁 (G 通り)
-    let mut wall_s = Wall::new(Point2D::new(0.0, 0.0), Point2D::new(12857.0, 0.0), 150.0);
-    wall_s.is_exterior = true;
-    wall_s.material = WallMaterial::Wood;
-    wall_s.finish_exterior = Some("サイディング".into());
-    wall_s.finish_interior = Some("PB+VP".into());
-    let wall_s_id = wall_s.id;
+    let wall_s_id = {
+        let w = f1.add_wall_mut(Point2D::new(0.0, 0.0), Point2D::new(12857.0, 0.0), 150.0);
+        w.is_exterior = true;
+        w.material = WallMaterial::Wood;
+        w.finish_exterior = Some("サイディング".into());
+        w.finish_interior = Some("PB+VP".into());
+        w.id
+    };
 
     // 北壁 (D 通り)
-    let mut wall_n = Wall::new(
-        Point2D::new(0.0, 10680.0),
-        Point2D::new(12857.0, 10680.0),
-        150.0,
-    );
-    wall_n.is_exterior = true;
-    wall_n.material = WallMaterial::Wood;
-    wall_n.finish_exterior = Some("サイディング".into());
-    let wall_n_id = wall_n.id;
+    let wall_n_id = {
+        let w = f1.add_wall_mut(
+            Point2D::new(0.0, 10680.0),
+            Point2D::new(12857.0, 10680.0),
+            150.0,
+        );
+        w.is_exterior = true;
+        w.material = WallMaterial::Wood;
+        w.finish_exterior = Some("サイディング".into());
+        w.id
+    };
 
     // 西壁 (C 通り)
-    let mut wall_w = Wall::new(Point2D::new(0.0, 0.0), Point2D::new(0.0, 10680.0), 150.0);
-    wall_w.is_exterior = true;
-    wall_w.material = WallMaterial::Wood;
-    let wall_w_id = wall_w.id;
+    let wall_w_id = {
+        let w = f1.add_wall_mut(Point2D::new(0.0, 0.0), Point2D::new(0.0, 10680.0), 150.0);
+        w.is_exterior = true;
+        w.material = WallMaterial::Wood;
+        w.id
+    };
 
     // 東壁 (A 通り)
-    let mut wall_e = Wall::new(
-        Point2D::new(12857.0, 0.0),
-        Point2D::new(12857.0, 10680.0),
-        150.0,
-    );
-    wall_e.is_exterior = true;
-    wall_e.material = WallMaterial::Wood;
-    let wall_e_id = wall_e.id;
+    let wall_e_id = {
+        let w = f1.add_wall_mut(
+            Point2D::new(12857.0, 0.0),
+            Point2D::new(12857.0, 10680.0),
+            150.0,
+        );
+        w.is_exterior = true;
+        w.material = WallMaterial::Wood;
+        w.id
+    };
 
     // --- 間仕切壁 ---
     // B 通り上の壁（キッチン/リビング仕切り）
-    let wall_b = Wall::new(
+    f1.add_wall(
         Point2D::new(6523.0, 0.0),
         Point2D::new(6523.0, 2875.0),
         80.0,
     );
 
     // E 通り上の壁（水回り/リビング仕切り）
-    let wall_e_inner = Wall::new(
+    f1.add_wall(
         Point2D::new(0.0, 8957.0),
         Point2D::new(6523.0, 8957.0),
         80.0,
     );
 
     // F 通り上の壁
-    let wall_f = Wall::new(
+    f1.add_wall(
         Point2D::new(0.0, 2875.0),
         Point2D::new(12857.0, 2875.0),
         80.0,
     );
 
     // fireplace 周りの腰壁 (H500)
-    let mut wall_fp = Wall::new(
-        Point2D::new(5000.0, 10000.0),
-        Point2D::new(8000.0, 10000.0),
-        150.0,
-    );
-    wall_fp.height = Some(500.0);
-
-    f1.walls = vec![
-        wall_s,
-        wall_n,
-        wall_w,
-        wall_e,
-        wall_b,
-        wall_e_inner,
-        wall_f,
-        wall_fp,
-    ];
+    {
+        let w = f1.add_wall_mut(
+            Point2D::new(5000.0, 10000.0),
+            Point2D::new(8000.0, 10000.0),
+            150.0,
+        );
+        w.height = Some(500.0);
+    }
 
     // --- 開口部 ---
     // 南壁の窓（リビング大開口）
@@ -222,12 +221,20 @@ fn main() {
         println!(
             "    外壁: {} 本 (総長 {:.1}m)",
             ext_walls.len(),
-            ext_walls.iter().map(|w| w.length()).sum::<f64>() / 1000.0
+            ext_walls
+                .iter()
+                .map(|w| floor.wall_length(w).unwrap_or(0.0))
+                .sum::<f64>()
+                / 1000.0
         );
         println!(
             "    内壁: {} 本 (総長 {:.1}m)",
             int_walls.len(),
-            int_walls.iter().map(|w| w.length()).sum::<f64>() / 1000.0
+            int_walls
+                .iter()
+                .map(|w| floor.wall_length(w).unwrap_or(0.0))
+                .sum::<f64>()
+                / 1000.0
         );
 
         for room in &floor.rooms {

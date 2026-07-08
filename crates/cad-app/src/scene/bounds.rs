@@ -22,9 +22,9 @@ pub fn model_bounds(building: &Building, floor_idx: usize) -> [f64; 4] {
         acc(g[2], g[3]);
     }
     if let Some(floor) = building.floors.get(floor_idx) {
-        for w in &floor.walls {
-            acc(w.start.x, w.start.y);
-            acc(w.end.x, w.end.y);
+        // 壁端点＝グラフのノード。
+        for n in &floor.nodes {
+            acc(n.point.x, n.point.y);
         }
         for r in &floor.rooms {
             for p in &r.boundary {
