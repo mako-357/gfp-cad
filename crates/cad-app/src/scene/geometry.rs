@@ -19,7 +19,7 @@ pub fn build_overlay(floor: &Floor, sel: Selection) -> Geo {
     match sel {
         Selection::Wall(id) => {
             if let Some(w) = floor.walls.iter().find(|w| w.id == id) {
-                wall_rect(&mut g, w, &floor.walls, config::SEL);
+                wall_rect(&mut g, w, floor, config::SEL);
             }
         }
         Selection::Opening(id) => {
@@ -51,10 +51,10 @@ pub fn build(building: &Building, floor_idx: usize) -> Geo {
         // interior wall shares an L-corner with an exterior wall, both mitre-extend
         // and overlap — drawing the exterior last keeps the shell colour on top.
         for wall in floor.walls.iter().filter(|w| !w.is_exterior) {
-            wall_body(&mut g, wall, &floor.walls);
+            wall_body(&mut g, wall, floor);
         }
         for wall in floor.walls.iter().filter(|w| w.is_exterior) {
-            wall_body(&mut g, wall, &floor.walls);
+            wall_body(&mut g, wall, floor);
         }
         for opening in &floor.openings {
             opening_mark(&mut g, floor, opening);
@@ -85,24 +85,27 @@ fn grid(g: &mut Geo, building: &Building, bbox: [f64; 4]) {
     }
 }
 
-fn wall_body(g: &mut Geo, wall: &Wall, walls: &[Wall]) {
+fn wall_body(g: &mut Geo, wall: &Wall, floor: &Floor) {
     let color = if wall.is_exterior {
         config::WALL_EXT
     } else {
         config::WALL_INT
     };
-    wall_rect(g, wall, walls, color);
+    wall_rect(g, wall, floor, color);
 }
 
 /// Push a wall's face rectangle in `color`. An end is extended by half-thickness
-/// along the centreline **only where another wall shares that endpoint** (an
+/// along the centreline **only where another wall shares that end node** (an
 /// L-corner) so orthogonal corners mitre cleanly; a free end keeps its exact
 /// length (no stub), and a T-junction end (which meets another wall's *span*,
-/// not its endpoint) is not extended (so it can't poke through the shell).
-/// Render-only — the exact face (`Wall::face_quad`) is what DXF/AutoCAD use.
-fn wall_rect(g: &mut Geo, wall: &Wall, walls: &[Wall], color: u32) {
-    let dx = wall.end.x - wall.start.x;
-    let dy = wall.end.y - wall.start.y;
+/// not its node) is not extended (so it can't poke through the shell).
+/// Render-only — the exact face (`face_quad`) is what DXF/AutoCAD use.
+fn wall_rect(g: &mut Geo, wall: &Wall, floor: &Floor, color: u32) {
+    let Some((a, b)) = floor.wall_endpoints(wall) else {
+        return;
+    };
+    let dx = b.x - a.x;
+    let dy = b.y - a.y;
     let len = (dx * dx + dy * dy).sqrt();
     if len < 0.1 {
         return;
@@ -110,20 +113,20 @@ fn wall_rect(g: &mut Geo, wall: &Wall, walls: &[Wall], color: u32) {
     let t = wall.thickness / 2.0;
     let (ux, uy) = (dx / len, dy / len); // along centreline
     let (nx, ny) = (-uy * t, ux * t); // perpendicular, half-thickness
-    let ext_s = if shares_endpoint(walls, wall, wall.start) {
+    let ext_s = if shares_node(floor, wall, wall.start) {
         t
     } else {
         0.0
     };
-    let ext_e = if shares_endpoint(walls, wall, wall.end) {
+    let ext_e = if shares_node(floor, wall, wall.end) {
         t
     } else {
         0.0
     };
-    let sx = wall.start.x - ux * ext_s;
-    let sy = wall.start.y - uy * ext_s;
-    let ex = wall.end.x + ux * ext_e;
-    let ey = wall.end.y + uy * ext_e;
+    let sx = a.x - ux * ext_s;
+    let sy = a.y - uy * ext_s;
+    let ex = b.x + ux * ext_e;
+    let ey = b.y + uy * ext_e;
     push_quad(
         g,
         [
@@ -136,12 +139,13 @@ fn wall_rect(g: &mut Geo, wall: &Wall, walls: &[Wall], color: u32) {
     );
 }
 
-/// True if any *other* wall has an endpoint coincident with `p` (~1mm).
-fn shares_endpoint(walls: &[Wall], wall: &Wall, p: cad_core::Point2D) -> bool {
-    let near = |a: cad_core::Point2D| (a.x - p.x).abs() < 1.0 && (a.y - p.y).abs() < 1.0;
-    walls
+/// True if any *other* wall shares the node `node` as one of its endpoints
+/// (exact, via `NodeId`) — i.e. an L-corner.
+fn shares_node(floor: &Floor, wall: &Wall, node: cad_core::NodeId) -> bool {
+    floor
+        .walls
         .iter()
-        .any(|w| w.id != wall.id && (near(w.start) || near(w.end)))
+        .any(|w| w.id != wall.id && (w.start == node || w.end == node))
 }
 
 fn opening_mark(g: &mut Geo, floor: &Floor, opening: &Opening) {
@@ -152,15 +156,18 @@ fn opening_rect(g: &mut Geo, floor: &Floor, opening: &Opening, color: u32) {
     let Some(wall) = floor.walls.iter().find(|w| w.id == opening.wall_id) else {
         return;
     };
-    let (dx, dy) = (wall.end.x - wall.start.x, wall.end.y - wall.start.y);
+    let Some((a, b)) = floor.wall_endpoints(wall) else {
+        return;
+    };
+    let (dx, dy) = (b.x - a.x, b.y - a.y);
     let len = (dx * dx + dy * dy).sqrt();
     if len < 0.1 {
         return;
     }
     let (ux, uy) = (dx / len, dy / len);
     let (nx, ny) = (-uy, ux);
-    let cx = wall.start.x + ux * opening.position;
-    let cy = wall.start.y + uy * opening.position;
+    let cx = a.x + ux * opening.position;
+    let cy = a.y + uy * opening.position;
     let hw = opening.width / 2.0;
     let t = wall.thickness / 2.0 + 10.0; // slightly proud of the wall
     push_quad(

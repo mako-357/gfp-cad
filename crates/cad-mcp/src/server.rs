@@ -146,11 +146,10 @@ impl GfpCadMcpServer {
         let Some(floor) = b.floors.iter_mut().find(|f| f.name == i.floor) else {
             return format!("Error: Floor '{}' not found", i.floor);
         };
-        let mut wall = Wall::new(
-            Point2D::new(i.x1, i.y1),
-            Point2D::new(i.x2, i.y2),
-            i.thickness,
-        );
+        // 端点はノードに解決（一致する既存端点があれば接合）。
+        let start = floor.add_node(Point2D::new(i.x1, i.y1));
+        let end = floor.add_node(Point2D::new(i.x2, i.y2));
+        let mut wall = Wall::new(start, end, i.thickness);
         if let Some(ext) = i.is_exterior {
             wall.is_exterior = ext;
         }
@@ -448,8 +447,18 @@ impl GfpCadMcpServer {
         match db.load_building(&rid).await {
             Ok(b) => {
                 let name = b.name.clone();
+                // モデル整合を検証（dangling ノード等の silent なデータ欠落を可視化）。
+                let issues = b.validate();
                 self.state.lock().await.building = Some(b);
-                format!("Loaded '{name}'")
+                if issues.is_empty() {
+                    format!("Loaded '{name}'")
+                } else {
+                    format!(
+                        "Loaded '{name}' (警告 {}件: {})",
+                        issues.len(),
+                        issues.join("; ")
+                    )
+                }
             }
             Err(e) => format!("Error: {e}"),
         }

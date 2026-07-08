@@ -22,49 +22,55 @@ fn build_yamanakako() -> Building {
     let mut f1 = Floor::new("1F", 200.0, 3000.0);
     f1.ceiling_height = 2700.0;
 
-    let mut ws = Wall::new(Point2D::new(0.0, 0.0), Point2D::new(12857.0, 0.0), 150.0);
-    ws.is_exterior = true;
-    let ws_id = ws.id;
-    let mut wn = Wall::new(
-        Point2D::new(0.0, 10680.0),
-        Point2D::new(12857.0, 10680.0),
-        150.0,
-    );
-    wn.is_exterior = true;
-    let wn_id = wn.id;
-    let mut ww = Wall::new(Point2D::new(0.0, 0.0), Point2D::new(0.0, 10680.0), 150.0);
-    ww.is_exterior = true;
-    let ww_id = ww.id;
-    let mut we = Wall::new(
-        Point2D::new(12857.0, 0.0),
-        Point2D::new(12857.0, 10680.0),
-        150.0,
-    );
-    we.is_exterior = true;
-    let we_id = we.id;
+    let ws_id = {
+        let w = f1.add_wall_mut(Point2D::new(0.0, 0.0), Point2D::new(12857.0, 0.0), 150.0);
+        w.is_exterior = true;
+        w.id
+    };
+    let wn_id = {
+        let w = f1.add_wall_mut(
+            Point2D::new(0.0, 10680.0),
+            Point2D::new(12857.0, 10680.0),
+            150.0,
+        );
+        w.is_exterior = true;
+        w.id
+    };
+    let ww_id = {
+        let w = f1.add_wall_mut(Point2D::new(0.0, 0.0), Point2D::new(0.0, 10680.0), 150.0);
+        w.is_exterior = true;
+        w.id
+    };
+    let we_id = {
+        let w = f1.add_wall_mut(
+            Point2D::new(12857.0, 0.0),
+            Point2D::new(12857.0, 10680.0),
+            150.0,
+        );
+        w.is_exterior = true;
+        w.id
+    };
 
-    let w_b = Wall::new(
+    f1.add_wall(
         Point2D::new(6523.0, 0.0),
         Point2D::new(6523.0, 2875.0),
         80.0,
     );
-    let w_f = Wall::new(
+    f1.add_wall(
         Point2D::new(0.0, 2875.0),
         Point2D::new(12857.0, 2875.0),
         80.0,
     );
-    let w_e = Wall::new(
+    f1.add_wall(
         Point2D::new(0.0, 8957.0),
         Point2D::new(6523.0, 8957.0),
         80.0,
     );
-    let w_e2 = Wall::new(
+    f1.add_wall(
         Point2D::new(6523.0, 8957.0),
         Point2D::new(12857.0, 8957.0),
         80.0,
     );
-
-    f1.walls = vec![ws, wn, ww, we, w_b, w_f, w_e, w_e2];
 
     f1.openings
         .push(Opening::window(ws_id, 3000.0, 3600.0, 2000.0, 400.0));

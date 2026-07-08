@@ -148,8 +148,8 @@ impl DxfExporter {
                 } else {
                     "GFP_WALL"
                 };
-                // 壁面は cad_core の共有定義(Wall::face_quad)を使う
-                let Some(q) = wall.face_quad() else {
+                // 壁面は cad_core の共有定義をノード解決して使う
+                let Some(q) = floor.wall_face_quad(wall) else {
                     continue;
                 };
                 dxf.lwpolyline(
@@ -167,17 +167,19 @@ impl DxfExporter {
 
             // 開口
             for opening in &floor.openings {
-                if let Some(wall) = floor.walls.iter().find(|w| w.id == opening.wall_id) {
-                    let dx = wall.end.x - wall.start.x;
-                    let dy = wall.end.y - wall.start.y;
+                if let Some(wall) = floor.walls.iter().find(|w| w.id == opening.wall_id)
+                    && let Some((a, b)) = floor.wall_endpoints(wall)
+                {
+                    let dx = b.x - a.x;
+                    let dy = b.y - a.y;
                     let len = (dx * dx + dy * dy).sqrt();
                     if len < 0.1 {
                         continue;
                     }
                     let ux = dx / len;
                     let uy = dy / len;
-                    let cx = wall.start.x + ux * opening.position;
-                    let cy = wall.start.y + uy * opening.position;
+                    let cx = a.x + ux * opening.position;
+                    let cy = a.y + uy * opening.position;
                     let hw = opening.width / 2.0;
                     let nx = -uy * wall.thickness;
                     let ny = ux * wall.thickness;

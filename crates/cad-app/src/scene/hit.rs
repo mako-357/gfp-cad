@@ -1,6 +1,6 @@
 //! World-space hit-testing. Priority: openings > walls > rooms.
 
-use cad_core::{Building, Floor, Opening, Wall};
+use cad_core::{Building, Floor, Opening};
 
 use crate::document::Selection;
 
@@ -28,14 +28,13 @@ pub fn snap(building: &Building, floor: Option<&Floor>, world: [f64; 2], tol: f6
     }
     let mut best = (out[0] - world[0]).hypot(out[1] - world[1]);
 
+    // 壁端点＝グラフのノードへスナップ。
     if let Some(f) = floor {
-        for w in &f.walls {
-            for e in [[w.start.x, w.start.y], [w.end.x, w.end.y]] {
-                let d = (e[0] - world[0]).hypot(e[1] - world[1]);
-                if d <= tol && d < best {
-                    best = d;
-                    out = e;
-                }
+        for n in &f.nodes {
+            let d = (n.point.x - world[0]).hypot(n.point.y - world[1]);
+            if d <= tol && d < best {
+                best = d;
+                out = [n.point.x, n.point.y];
             }
         }
     }
@@ -47,13 +46,16 @@ pub fn snap(building: &Building, floor: Option<&Floor>, world: [f64; 2], tol: f6
 pub fn pick(floor: &Floor, world: [f64; 2], tol: f64) -> Selection {
     for o in &floor.openings {
         if let Some(w) = floor.walls.iter().find(|w| w.id == o.wall_id)
-            && hits_opening(w, o, world, tol)
+            && let Some((a, b)) = floor.wall_endpoints(w)
+            && hits_opening([a.x, a.y], [b.x, b.y], w.thickness, o, world, tol)
         {
             return Selection::Opening(o.id);
         }
     }
     for w in &floor.walls {
-        if hits_wall(w, world, tol) {
+        if let Some((a, b)) = floor.wall_endpoints(w)
+            && hits_wall([a.x, a.y], [b.x, b.y], w.thickness, world, tol)
+        {
             return Selection::Wall(w.id);
         }
     }
@@ -65,24 +67,31 @@ pub fn pick(floor: &Floor, world: [f64; 2], tol: f64) -> Selection {
     Selection::None
 }
 
-fn hits_wall(wall: &Wall, p: [f64; 2], tol: f64) -> bool {
-    let (d, t) = dist_to_segment(p, [wall.start.x, wall.start.y], [wall.end.x, wall.end.y]);
-    (0.0..=1.0).contains(&t) && d <= wall.thickness / 2.0 + tol
+fn hits_wall(a: [f64; 2], b: [f64; 2], thickness: f64, p: [f64; 2], tol: f64) -> bool {
+    let (d, t) = dist_to_segment(p, a, b);
+    (0.0..=1.0).contains(&t) && d <= thickness / 2.0 + tol
 }
 
-fn hits_opening(wall: &Wall, o: &Opening, p: [f64; 2], tol: f64) -> bool {
-    let (dx, dy) = (wall.end.x - wall.start.x, wall.end.y - wall.start.y);
+fn hits_opening(
+    a: [f64; 2],
+    b: [f64; 2],
+    thickness: f64,
+    o: &Opening,
+    p: [f64; 2],
+    tol: f64,
+) -> bool {
+    let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
     let len = (dx * dx + dy * dy).sqrt();
     if len < 0.1 {
         return false;
     }
     let (ux, uy) = (dx / len, dy / len);
     // Projection along the wall centerline, and perpendicular distance.
-    let rx = p[0] - wall.start.x;
-    let ry = p[1] - wall.start.y;
+    let rx = p[0] - a[0];
+    let ry = p[1] - a[1];
     let along = rx * ux + ry * uy;
     let perp = (rx * -uy + ry * ux).abs();
-    (along - o.position).abs() <= o.width / 2.0 + tol && perp <= wall.thickness / 2.0 + tol
+    (along - o.position).abs() <= o.width / 2.0 + tol && perp <= thickness / 2.0 + tol
 }
 
 /// Distance from `p` to segment `a`-`b`, plus the clamped projection parameter t in [0,1].

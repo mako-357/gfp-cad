@@ -22,9 +22,12 @@ pub fn model_bounds(building: &Building, floor_idx: usize) -> [f64; 4] {
         acc(g[2], g[3]);
     }
     if let Some(floor) = building.floors.get(floor_idx) {
+        // 実際に描画される点（壁が参照する端点）から算出。孤児ノードは bbox に含めない。
         for w in &floor.walls {
-            acc(w.start.x, w.start.y);
-            acc(w.end.x, w.end.y);
+            if let Some((a, b)) = floor.wall_endpoints(w) {
+                acc(a.x, a.y);
+                acc(b.x, b.y);
+            }
         }
         for r in &floor.rooms {
             for p in &r.boundary {
