@@ -8,7 +8,11 @@ use cad_core::Building;
 
 pub fn load(path: &Path) -> anyhow::Result<Building> {
     let file = File::open(path)?;
-    let building = serde_json::from_reader(BufReader::new(file))?;
+    let building: Building = serde_json::from_reader(BufReader::new(file))?;
+    // モデル整合の問題（dangling ノード等）は silent なデータ欠落になるので警告する。
+    for issue in building.validate() {
+        log::warn!("読み込んだモデルに不整合: {issue}");
+    }
     Ok(building)
 }
 

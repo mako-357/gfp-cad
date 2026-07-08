@@ -447,8 +447,18 @@ impl GfpCadMcpServer {
         match db.load_building(&rid).await {
             Ok(b) => {
                 let name = b.name.clone();
+                // モデル整合を検証（dangling ノード等の silent なデータ欠落を可視化）。
+                let issues = b.validate();
                 self.state.lock().await.building = Some(b);
-                format!("Loaded '{name}'")
+                if issues.is_empty() {
+                    format!("Loaded '{name}'")
+                } else {
+                    format!(
+                        "Loaded '{name}' (警告 {}件: {})",
+                        issues.len(),
+                        issues.join("; ")
+                    )
+                }
             }
             Err(e) => format!("Error: {e}"),
         }

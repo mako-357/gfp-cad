@@ -48,4 +48,10 @@ impl Building {
     pub fn total_floor_area(&self) -> f64 {
         self.floors.iter().map(|f| f.area()).sum()
     }
+
+    /// 全階のモデル整合を検証し、問題の一覧を返す（空なら健全）。
+    /// ロード後・出力前に呼び、dangling 参照や孤児ノード等の silent なデータ欠落を検出する。
+    pub fn validate(&self) -> Vec<String> {
+        self.floors.iter().flat_map(|f| f.validate()).collect()
+    }
 }

@@ -112,3 +112,33 @@ fn test_serialization() {
     let restored: Building = serde_json::from_str(&json).unwrap();
     assert_eq!(restored.name, "テスト");
 }
+
+#[test]
+fn test_shared_node_join() {
+    // 端点を共有する2壁は同じノードに解決される（構造的接合）。
+    let mut floor = Floor::new("1F", 0.0, 3000.0);
+    floor.add_wall(Point2D::new(0.0, 0.0), Point2D::new(1000.0, 0.0), 100.0);
+    floor.add_wall(
+        Point2D::new(1000.0, 0.0),
+        Point2D::new(1000.0, 1000.0),
+        100.0,
+    );
+    // 端点: (0,0),(1000,0),(1000,1000) の3ノード（(1000,0)を共有）。
+    assert_eq!(floor.nodes.len(), 3);
+    assert_eq!(floor.walls[0].end, floor.walls[1].start);
+    // 健全なモデルは validate で問題ゼロ。
+    assert!(floor.validate().is_empty());
+}
+
+#[test]
+fn test_validate_detects_dangling_and_orphan() {
+    let mut floor = Floor::new("1F", 0.0, 3000.0);
+    floor.add_wall(Point2D::new(0.0, 0.0), Point2D::new(1000.0, 0.0), 100.0);
+    // 実在しないノードを参照する壁 → dangling（floor に追加していない Node の id）。
+    floor.walls[0].end = Node::new(Point2D::new(-1.0, -1.0)).id;
+    // どの壁も参照しないノードを追加 → orphan。
+    floor.add_node(Point2D::new(9999.0, 9999.0));
+    let issues = floor.validate();
+    assert!(issues.iter().any(|s| s.contains("dangling")));
+    assert!(issues.iter().any(|s| s.contains("orphan")));
+}
