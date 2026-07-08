@@ -59,12 +59,18 @@ pub fn pick(floor: &Floor, world: [f64; 2], tol: f64) -> Selection {
             return Selection::Wall(w.id);
         }
     }
-    for r in &floor.rooms {
-        if let Some(poly) = floor.room_boundary(r)
-            && point_in_polygon(world, &poly)
+    // 面は1回だけ導出。クリックを含む**最小**面の部屋を選ぶ（穴の内側の部屋が外側に勝つ）。
+    let mut best: Option<(Selection, f64)> = None;
+    for (r, face) in floor.rooms_faces() {
+        if let Some(f) = face
+            && point_in_polygon(world, &f.polygon)
+            && best.as_ref().is_none_or(|(_, a)| f.area < *a)
         {
-            return Selection::Room(r.id);
+            best = Some((Selection::Room(r.id), f.area));
         }
+    }
+    if let Some((sel, _)) = best {
+        return sel;
     }
     Selection::None
 }

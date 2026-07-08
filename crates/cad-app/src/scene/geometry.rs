@@ -46,10 +46,10 @@ pub fn build(building: &Building, floor_idx: usize) -> Geo {
     grid(&mut g, building, bbox);
 
     if let Some(floor) = building.floors.get(floor_idx) {
-        for room in &floor.rooms {
-            // 部屋の境界は壁グラフの面から導出（未囲いなら塗らない）。
-            if let Some(poly) = floor.room_boundary(room) {
-                fill_polygon(&mut g, &poly, config::ROOM_FILL);
+        // 部屋の面は壁グラフから **1回だけ** 導出（room 毎に再構築しない）。未囲いなら塗らない。
+        for (_room, face) in floor.rooms_faces() {
+            if let Some(f) = face {
+                fill_face(&mut g, &f, config::ROOM_FILL);
             }
         }
         // Interior walls first, then the (brighter) exterior shell on top: where an
@@ -187,23 +187,41 @@ fn opening_rect(g: &mut Geo, floor: &Floor, opening: &Opening, color: u32) {
     );
 }
 
-/// Fill an arbitrary (possibly concave) polygon via lyon.
+/// Fill a derived face (outer ring minus holes) via lyon. Even-odd fill rule cuts
+/// the holes (non-connected inner loops, e.g. a floating closet).
+fn fill_face(g: &mut Geo, face: &cad_core::Face, color: u32) {
+    let mut builder = Path::builder();
+    add_ring(&mut builder, &face.polygon);
+    for hole in &face.holes {
+        add_ring(&mut builder, hole);
+    }
+    fill_built(g, builder.build(), color);
+}
+
+/// Fill an arbitrary (possibly concave) polygon via lyon (no holes).
 fn fill_polygon(g: &mut Geo, boundary: &[cad_core::Point2D], color: u32) {
-    if boundary.len() < 3 {
+    let mut builder = Path::builder();
+    add_ring(&mut builder, boundary);
+    fill_built(g, builder.build(), color);
+}
+
+/// Add one closed ring to a path builder (skips rings with < 3 points).
+fn add_ring(builder: &mut lyon::path::path::Builder, ring: &[cad_core::Point2D]) {
+    if ring.len() < 3 {
         return;
     }
-    let mut builder = Path::builder();
-    builder.begin(point(boundary[0].x as f32, boundary[0].y as f32));
-    for p in &boundary[1..] {
+    builder.begin(point(ring[0].x as f32, ring[0].y as f32));
+    for p in &ring[1..] {
         builder.line_to(point(p.x as f32, p.y as f32));
     }
     builder.end(true);
-    let path = builder.build();
+}
 
+fn fill_built(g: &mut Geo, path: Path, color: u32) {
     let mut tess = FillTessellator::new();
     let _ = tess.tessellate_path(
         &path,
-        &FillOptions::tolerance(1.0),
+        &FillOptions::tolerance(1.0), // lyon default fill rule is even-odd → holes cut
         &mut BuffersBuilder::new(g, |v: FillVertex| Vertex {
             pos: v.position().to_array(),
             color,

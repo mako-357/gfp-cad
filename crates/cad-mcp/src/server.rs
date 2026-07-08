@@ -224,9 +224,13 @@ impl GfpCadMcpServer {
                 floor.openings.len(),
                 floor.rooms.len()
             );
-            for room in &floor.rooms {
-                let area = floor.room_area(room).unwrap_or(0.0);
-                out += &format!("  {} — {area:.1}sqm\n", room.name);
+            for (room, face) in floor.rooms_faces() {
+                match face {
+                    Some(f) => {
+                        out += &format!("  {} — {:.1}sqm\n", room.name, f.area / 1_000_000.0)
+                    }
+                    None => out += &format!("  {} — 未囲い\n", room.name),
+                }
             }
         }
         out += &format!("延べ面積: {:.1}sqm", b.total_floor_area());

@@ -8,12 +8,13 @@ use std::collections::HashMap;
 
 use crate::{Node, NodeId, Point2D, Wall};
 
-/// 壁グラフの1つの面。`nodes` は囲むノードループ、`polygon` はその座標、`area` は符号付き
-/// （正 = 内側の有界面 = 部屋候補、負 = 外部の非有界面）。
+/// 壁グラフの1つの有界面（部屋候補）。`nodes`/`polygon` は外周ループ、`holes` は内部に
+/// 含まれる非連結ループ（浮いたクローゼット等の穴）、`area` は**穴を差し引いた正味面積**(mm²)。
 #[derive(Debug, Clone)]
 pub struct Face {
     pub nodes: Vec<NodeId>,
     pub polygon: Vec<Point2D>,
+    pub holes: Vec<Vec<Point2D>>,
     pub area: f64,
 }
 
@@ -50,6 +51,27 @@ fn signed_area(poly: &[Point2D]) -> f64 {
         s += a.x * b.y - b.x * a.y;
     }
     s / 2.0
+}
+
+/// 2線分 a1-a2, b1-b2 が**内部で真に交差**するか（端点共有・接触は除く）。
+pub fn segments_cross(a1: Point2D, a2: Point2D, b1: Point2D, b2: Point2D) -> bool {
+    let cross =
+        |o: Point2D, p: Point2D, q: Point2D| (p.x - o.x) * (q.y - o.y) - (p.y - o.y) * (q.x - o.x);
+    let d1 = cross(b1, b2, a1);
+    let d2 = cross(b1, b2, a2);
+    let d3 = cross(a1, a2, b1);
+    let d4 = cross(a1, a2, b2);
+    // 端点接触（いずれかが 0）は交差扱いしない（共有端点・T字は planarize の担当）。
+    const E: f64 = 1e-6;
+    if d1.abs() < E || d2.abs() < E || d3.abs() < E || d4.abs() < E {
+        return false;
+    }
+    (d1 > 0.0) != (d2 > 0.0) && (d3 > 0.0) != (d4 > 0.0)
+}
+
+/// 点がセグメント a-b の内部に `tol` 以内で載っているか（端点除外）。validate 用に公開。
+pub fn point_near_segment(p: Point2D, a: Point2D, b: Point2D, tol: f64) -> bool {
+    point_on_segment(p, a, b, tol).is_some()
 }
 
 /// 点がポリゴン内部か（even-odd）。
@@ -103,7 +125,8 @@ pub fn faces(nodes: &[Node], walls: &[Wall], tol: f64) -> Vec<Face> {
         on.dedup_by_key(|(_, id)| *id);
         for pair in on.windows(2) {
             let (u, v) = (pair[0].1, pair[1].1);
-            if u != v {
+            // 同一 id / 同一座標（zero-length）は角度環を汚すので除外。
+            if u != v && pt[&u].distance_to(&pt[&v]) > 1e-6 {
                 he.push((u, v));
                 he.push((v, u));
             }
@@ -143,9 +166,14 @@ pub fn faces(nodes: &[Node], walls: &[Wall], tol: f64) -> Vec<Face> {
         ring[(k + deg - 1) % deg]
     };
 
-    // --- 3. 面トレース ---
+    // --- 3. 全サイクルのトレース ---
+    struct Cycle {
+        nodes: Vec<NodeId>,
+        polygon: Vec<Point2D>,
+        area: f64, // 符号付き
+    }
     let mut visited = vec![false; he.len()];
-    let mut result = Vec::new();
+    let mut cycles: Vec<Cycle> = Vec::new();
     for start in 0..he.len() {
         if visited[start] {
             continue;
@@ -162,13 +190,71 @@ pub fn faces(nodes: &[Node], walls: &[Wall], tol: f64) -> Vec<Face> {
         }
         let polygon: Vec<Point2D> = loop_nodes.iter().map(|id| pt[id]).collect();
         let area = signed_area(&polygon);
-        result.push(Face {
+        cycles.push(Cycle {
             nodes: loop_nodes,
             polygon,
             area,
         });
     }
-    result
+
+    // --- 4. 有界面 + 穴の関連付け ---
+    // 有界面 = CCW(正)。CW(負)サイクルは (a) 全体の外周を CW で見た**非有界面**が1つと、
+    // (b) 非連結の内側ループ（浮いたクローゼット等）の外周 = **穴** から成る。
+    // 非有界面は必ず |面積| 最大なので除外し、残る負サイクルを穴として最小の**別の**
+    // 有界面（自身の裏返し＝同一ノード集合の面は除く）へ割り当てて差し引く。
+    const EPS: f64 = 1.0;
+    let mut faces: Vec<Face> = cycles
+        .iter()
+        .filter(|c| c.area > EPS)
+        .map(|c| Face {
+            nodes: c.nodes.clone(),
+            polygon: c.polygon.clone(),
+            holes: Vec::new(),
+            area: c.area,
+        })
+        .collect();
+    let mut negatives: Vec<&Cycle> = cycles.iter().filter(|c| c.area < -EPS).collect();
+    // 非有界面（|面積|最大）を除外。
+    if let Some(outer) = negatives
+        .iter()
+        .enumerate()
+        .max_by(|a, b| a.1.area.abs().total_cmp(&b.1.area.abs()))
+        .map(|(i, _)| i)
+    {
+        negatives.swap_remove(outer);
+    }
+    for c in negatives {
+        let hole_set: std::collections::BTreeSet<NodeId> = c.nodes.iter().copied().collect();
+        let rep = centroid(&c.polygon);
+        if let Some(idx) = faces
+            .iter()
+            .enumerate()
+            .filter(|(_, f)| {
+                f.polygon.len() >= 3
+                    && point_in_polygon(rep, &f.polygon)
+                    && f.nodes
+                        .iter()
+                        .copied()
+                        .collect::<std::collections::BTreeSet<_>>()
+                        != hole_set
+            })
+            .min_by(|a, b| a.1.area.total_cmp(&b.1.area))
+            .map(|(i, _)| i)
+        {
+            faces[idx].area -= c.area.abs();
+            faces[idx].holes.push(c.polygon.clone());
+        }
+    }
+    faces
+}
+
+/// ポリゴン頂点の重心（穴の代表内部点として使う。単純多角形を想定）。
+fn centroid(poly: &[Point2D]) -> Point2D {
+    let n = poly.len().max(1) as f64;
+    let (sx, sy) = poly
+        .iter()
+        .fold((0.0, 0.0), |(sx, sy), p| (sx + p.x, sy + p.y));
+    Point2D::new(sx / n, sy / n)
 }
 
 #[cfg(test)]

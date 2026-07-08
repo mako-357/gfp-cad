@@ -48,9 +48,10 @@ pub fn build(building: &Building, floor_idx: usize) -> Vec<LabelSpec> {
     }
 
     // Room name (SemiBold) + derived area (Regular) at the room seed. 未囲いはスキップ。
+    // 面は1回だけ導出（room 毎に再構築しない）。
     if let Some(floor) = building.floors.get(floor_idx) {
-        for room in &floor.rooms {
-            let Some(area) = floor.room_area(room) else {
+        for (room, face) in floor.rooms_faces() {
+            let Some(area) = face.map(|f| f.area / 1_000_000.0) else {
                 continue;
             };
             let (cx, cy) = (room.seed.x, room.seed.y);

@@ -8,6 +8,12 @@ use crate::Point2D;
 /// 境界は**持たない** —— `seed`（部屋内部の1点）を壁グラフの面に紐づけ、境界・面積は
 /// `Floor::room_boundary` / `Floor::room_area` で**導出**する（Revit の Room 相当）。
 /// これにより壁を動かすと部屋も追従し、壁と部屋が desync しない。
+///
+/// **破壊的変更**: 旧 `boundary: Vec<Point2D>` を廃し `seed: Point2D` にした（`#[serde(default)]`
+/// を付けないので、`seed` を欠く旧 JSON は**明示的にロード失敗**する＝silent な誤読は起きない）。
+/// スキーマのバージョニング/移行は未実装。旧データを読む必要が出たら `Building` にスキーマ版数を
+/// 導入して移行シムを噛ませること。なお ba6c9a6 の Wall(Point2D→NodeId) 変更で旧データは既に
+/// 非互換になっているため、実運用上この破壊は追加の後退を生まない。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Room {
     pub id: Uuid,

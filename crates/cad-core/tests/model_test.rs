@@ -145,6 +145,61 @@ fn test_shared_node_join() {
 }
 
 #[test]
+fn nested_room_subtracts_hole() {
+    // 外周 10000×10000 の中に、非連結の 2000×2000 クローゼットが浮いている。
+    let mut floor = Floor::new("1F", 0.0, 3000.0);
+    for (a, b) in [
+        ((0.0, 0.0), (10000.0, 0.0)),
+        ((10000.0, 0.0), (10000.0, 10000.0)),
+        ((10000.0, 10000.0), (0.0, 10000.0)),
+        ((0.0, 10000.0), (0.0, 0.0)),
+        // 非連結の内側ループ
+        ((4000.0, 4000.0), (6000.0, 4000.0)),
+        ((6000.0, 4000.0), (6000.0, 6000.0)),
+        ((6000.0, 6000.0), (4000.0, 6000.0)),
+        ((4000.0, 6000.0), (4000.0, 4000.0)),
+    ] {
+        floor.add_wall(Point2D::new(a.0, a.1), Point2D::new(b.0, b.1), 100.0);
+    }
+    let hall = Room::new("hall", Point2D::new(1000.0, 1000.0)); // 穴の外
+    let closet = Room::new("closet", Point2D::new(5000.0, 5000.0)); // 穴の中
+    // hall = 100 - 4 = 96㎡（穴を差し引く）、closet = 4㎡。
+    assert!((floor.room_area(&hall).unwrap() - 96.0).abs() < 0.1);
+    assert!((floor.room_area(&closet).unwrap() - 4.0).abs() < 0.1);
+    floor.rooms.push(hall);
+    floor.rooms.push(closet);
+    // 延べ面積は実フットプリント 100㎡（二重計上なし）。
+    assert!((floor.area() - 100.0).abs() < 0.1);
+}
+
+#[test]
+fn duplicate_seed_counts_area_once() {
+    // 5000×4000=20㎡ の1部屋に2シード → 面積は1回だけ計上、validate が競合を検出。
+    let mut floor = Floor::new("1F", 0.0, 3000.0);
+    for (a, b) in [
+        ((0.0, 0.0), (5000.0, 0.0)),
+        ((5000.0, 0.0), (5000.0, 4000.0)),
+        ((5000.0, 4000.0), (0.0, 4000.0)),
+        ((0.0, 4000.0), (0.0, 0.0)),
+    ] {
+        floor.add_wall(Point2D::new(a.0, a.1), Point2D::new(b.0, b.1), 100.0);
+    }
+    floor
+        .rooms
+        .push(Room::new("a", Point2D::new(2000.0, 2000.0)));
+    floor
+        .rooms
+        .push(Room::new("b", Point2D::new(3000.0, 2000.0)));
+    assert!((floor.area() - 20.0).abs() < 0.1, "同一面は1回だけ");
+    assert!(
+        floor
+            .validate()
+            .iter()
+            .any(|s| s.contains("同一の面に複数"))
+    );
+}
+
+#[test]
 fn test_validate_detects_dangling_and_orphan() {
     let mut floor = Floor::new("1F", 0.0, 3000.0);
     floor.add_wall(Point2D::new(0.0, 0.0), Point2D::new(1000.0, 0.0), 100.0);
