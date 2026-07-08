@@ -6,6 +6,8 @@ members = [
     "crates/cad-dxf",
     "crates/cad-acad",
     "crates/cad-mcp",
+    "crates/cad-mcp-codegen",
+    "crates/cad-app",
 ]
 
 [workspace.dependencies]

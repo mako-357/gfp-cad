@@ -12,10 +12,10 @@ cad-core = { path = "../cad-core" }
 cad-db = { path = "../cad-db" }
 cad-dxf = { path = "../cad-dxf" }
 cad-acad = { path = "../cad-acad" }
-rmcp = { version = "1.4", features = ["server", "transport-io", "macros"] }
+rmcp = { version = "2", features = ["server", "transport-io", "macros"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
-schemars = "0.8"
+schemars = "1"    # rmcp 2 が使う schemars 1.x に統一（bare use で rmcp::schemars と同一 crate）
 uuid = { workspace = true }
 tokio = { version = "1", features = ["full"] }
 anyhow = { workspace = true }

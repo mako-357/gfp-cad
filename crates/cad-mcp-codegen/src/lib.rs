@@ -1,0 +1,335 @@
+//! KDL(SSOT) → Rust codegen for cad-mcp.
+//!
+//! `schema/cad-mcp.kdl` を club-kdl で parse し、小さな IR を経て 2 つの Rust を吐く:
+//!   - `params.rs`   : 各 record → `#[derive(Debug, Deserialize, JsonSchema)]` 構造体
+//!   - `manifest.rs` : (tool 名, params 型, description, group) の一覧
+//!
+//! emit は決定的（フィールド順・型・省略性は KDL 記載順を保つ）。生成物は
+//! cad-mcp/src/generated/ に置かれ、cad-mcp が(CI/Linux で)コンパイルする。
+
+use anyhow::{Context, Result, bail};
+use club_kdl::KdlDeserialize;
+
+// =============================================================================
+// raw — KDL-shaped（club-kdl の KdlDeserialize derive で埋める）
+// =============================================================================
+
+#[derive(Debug, KdlDeserialize)]
+#[kdl(document)]
+struct RawDoc {
+    #[kdl(child)]
+    schema: Option<RawSchema>,
+}
+
+#[derive(Debug, KdlDeserialize)]
+#[kdl(name = "schema")]
+struct RawSchema {
+    #[kdl(argument)]
+    namespace: String,
+    #[kdl(property)]
+    version: String,
+    #[kdl(children, name = "record")]
+    records: Vec<RawRecord>,
+    #[kdl(children, name = "group")]
+    groups: Vec<RawGroup>,
+}
+
+#[derive(Debug, KdlDeserialize)]
+#[kdl(name = "record")]
+struct RawRecord {
+    #[kdl(argument)]
+    name: String,
+    #[kdl(children, name = "field")]
+    fields: Vec<RawField>,
+}
+
+#[derive(Debug, KdlDeserialize)]
+#[kdl(name = "field")]
+struct RawField {
+    #[kdl(argument)]
+    name: String,
+    #[kdl(property, rename = "type")]
+    type_str: String,
+    #[kdl(property, default)]
+    optional: bool,
+}
+
+#[derive(Debug, KdlDeserialize)]
+#[kdl(name = "group")]
+struct RawGroup {
+    #[kdl(argument)]
+    name: String,
+    #[kdl(children, name = "tool")]
+    tools: Vec<RawTool>,
+}
+
+#[derive(Debug, KdlDeserialize)]
+#[kdl(name = "tool")]
+struct RawTool {
+    #[kdl(argument)]
+    name: String,
+    #[kdl(property)]
+    params: String,
+    #[kdl(property)]
+    description: String,
+}
+
+// =============================================================================
+// IR — validate 済み
+// =============================================================================
+
+pub struct Schema {
+    pub records: Vec<Record>,
+    pub tools: Vec<ToolDef>,
+}
+
+pub struct Record {
+    pub name: String,
+    pub fields: Vec<Field>,
+}
+
+pub struct Field {
+    pub name: String,
+    pub ty: String, // resolved Rust type (Option 抜き)
+    pub optional: bool,
+}
+
+pub struct ToolDef {
+    pub name: String,
+    pub params: String,
+    pub description: String,
+    pub group: String,
+}
+
+/// `type="..."` を Rust 型へ。`array<X>` → `Vec<X>`。
+fn resolve_ty(t: &str) -> Result<String> {
+    let ty = match t {
+        "string" => "String".to_string(),
+        "f64" => "f64".to_string(),
+        "bool" => "bool".to_string(),
+        other => {
+            if let Some(inner) = other
+                .strip_prefix("array<")
+                .and_then(|s| s.strip_suffix('>'))
+            {
+                format!("Vec<{}>", inner)
+            } else {
+                bail!("未知の type: {other:?}");
+            }
+        }
+    };
+    Ok(ty)
+}
+
+pub fn parse(src: &str) -> Result<Schema> {
+    let doc: RawDoc = club_kdl::from_str(src).map_err(|e| anyhow::anyhow!("KDL parse: {e}"))?;
+    let raw = doc.schema.context("ルートに `schema` ノードが無い")?;
+    // namespace/version は将来 manifest に載せる用途。今は SSOT 完全性のため保持のみ。
+    let _ = (&raw.namespace, &raw.version);
+
+    let mut records = Vec::new();
+    for r in raw.records {
+        let mut fields = Vec::new();
+        for f in r.fields {
+            fields.push(Field {
+                ty: resolve_ty(&f.type_str)
+                    .with_context(|| format!("record {:?} field {:?}", r.name, f.name))?,
+                name: f.name,
+                optional: f.optional,
+            });
+        }
+        records.push(Record {
+            name: r.name,
+            fields,
+        });
+    }
+
+    let mut tools = Vec::new();
+    for g in raw.groups {
+        for t in g.tools {
+            tools.push(ToolDef {
+                name: t.name,
+                params: t.params,
+                description: t.description,
+                group: g.name.clone(),
+            });
+        }
+    }
+
+    validate(&records, &tools)?;
+    Ok(Schema { records, tools })
+}
+
+/// 参照・識別子整合の検証（Windows でも semantic な壊れを検出できるように、
+/// text-freshness だけでなくここで弾く）。
+fn validate(records: &[Record], tools: &[ToolDef]) -> Result<()> {
+    use std::collections::HashSet;
+    let names: HashSet<&str> = records.iter().map(|r| r.name.as_str()).collect();
+    if names.len() != records.len() {
+        bail!("record 名が重複しています");
+    }
+    for r in records {
+        for f in &r.fields {
+            if !is_ident(&f.name) {
+                bail!(
+                    "record {:?} の field 名が不正な識別子: {:?}",
+                    r.name,
+                    f.name
+                );
+            }
+            // array<Inner> の要素型は定義済み record でなければならない。
+            if let Some(inner) = f.ty.strip_prefix("Vec<").and_then(|s| s.strip_suffix('>'))
+                && !names.contains(inner)
+            {
+                bail!(
+                    "record {:?} field {:?}: 配列要素型 {:?} が未定義",
+                    r.name,
+                    f.name,
+                    inner
+                );
+            }
+        }
+    }
+    for t in tools {
+        if !is_ident(&t.name) {
+            bail!("tool 名が不正な識別子: {:?}", t.name);
+        }
+        if !names.contains(t.params.as_str()) {
+            bail!(
+                "tool {:?}: params 型 {:?} が未定義 record",
+                t.name,
+                t.params
+            );
+        }
+    }
+    Ok(())
+}
+
+fn is_ident(s: &str) -> bool {
+    let mut cs = s.chars();
+    matches!(cs.next(), Some(c) if c == '_' || c.is_ascii_alphabetic())
+        && s.chars().all(|c| c == '_' || c.is_ascii_alphanumeric())
+}
+
+/// server.rs のテキストから `#[tool(name = "..", description = "..")]` を抽出する。
+/// KDL(SSOT)の tool 表面と server.rs の実 router が乖離していないかを
+/// [`crate`] の test が突き合わせるのに使う（description の二重管理 drift を防ぐ）。
+pub fn parse_server_tools(src: &str) -> Result<Vec<(String, String)>> {
+    // `#[tool(` のみ対象（`#[tool_router]` / `#[tool_handler]` は括弧が無いので除外）。
+    // さらに「行頭(インデント除く)が `#[tool(`」に限定し、文字列/コメント中の
+    // 偶発的な `#[tool(` を phantom tool として拾わない。
+    let mut out = Vec::new();
+    let mut from = 0;
+    while let Some(rel) = src[from..].find("#[tool(") {
+        let at = from + rel;
+        let line_start = src[..at].rfind('\n').map(|i| i + 1).unwrap_or(0);
+        let line_anchored = src[line_start..at].chars().all(|c| c == ' ' || c == '\t');
+
+        let after_open = at + "#[tool(".len();
+        let end_rel = src[after_open..]
+            .find(")]")
+            .context("#[tool(...)] の閉じ `)]` が無い")?;
+        let attr = &src[after_open..after_open + end_rel];
+        from = after_open + end_rel + 2;
+        if !line_anchored {
+            continue;
+        }
+        let name =
+            attr_kv(attr, "name").with_context(|| format!("#[tool] に name が無い: {attr:?}"))?;
+        let desc = attr_kv(attr, "description")
+            .with_context(|| format!("#[tool] に description が無い: {attr:?}"))?;
+        out.push((name, desc));
+    }
+    Ok(out)
+}
+
+/// `key = "value"` の value を取り出す。`key` は単語境界で照合し（"name" が
+/// "rename" 等に部分一致しない）、属性の記載順にも依存しない。value 内に `"` は
+/// 含まれない前提。
+fn attr_kv(attr: &str, key: &str) -> Option<String> {
+    let mut from = 0;
+    while let Some(rel) = attr[from..].find(key) {
+        let i = from + rel;
+        let boundary_ok = attr[..i]
+            .chars()
+            .next_back()
+            .is_none_or(|c| !(c.is_ascii_alphanumeric() || c == '_'));
+        let after = attr[i + key.len()..].trim_start();
+        if boundary_ok && let Some(rhs) = after.strip_prefix('=') {
+            let body = rhs.trim_start().strip_prefix('"')?;
+            let close = body.find('"')?;
+            return Some(body[..close].to_string());
+        }
+        from = i + key.len();
+    }
+    None
+}
+
+// =============================================================================
+// emit — IR → Rust
+// =============================================================================
+
+const HEADER: &str = "// @generated by cad-mcp-codegen from schema/cad-mcp.kdl — DO NOT EDIT.\n// KDL を編集して `cargo run -p cad-mcp-codegen` で再生成する。\n";
+
+/// Rust 文字列リテラル用 escape（`\` と `"` のみ）。
+fn rust_str(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+pub fn emit_params(schema: &Schema) -> String {
+    let mut out = String::new();
+    out.push_str(HEADER);
+    // schemars は rmcp 2 が使う 1.x に Cargo.toml で統一済み → bare の `use schemars`
+    // で rmcp tool の trait 境界 `rmcp::schemars::JsonSchema`(同一 crate)を満たす
+    // (rmcp 自身も内部で bare `use schemars::JsonSchema` を使う)。将来 rmcp が
+    // schemars を別 major に上げた場合は「同一 crate でない」loud なコンパイルエラーで
+    // 検出できる(silent drift ではない)。
+    out.push_str("\nuse schemars::JsonSchema;\nuse serde::Deserialize;\n");
+    for r in &schema.records {
+        out.push_str("\n#[derive(Debug, Deserialize, JsonSchema)]\n");
+        if r.fields.is_empty() {
+            out.push_str(&format!("pub struct {} {{}}\n", r.name));
+            continue;
+        }
+        out.push_str(&format!("pub struct {} {{\n", r.name));
+        for f in &r.fields {
+            let ty = if f.optional {
+                format!("Option<{}>", f.ty)
+            } else {
+                f.ty.clone()
+            };
+            out.push_str(&format!("    pub {}: {},\n", f.name, ty));
+        }
+        out.push_str("}\n");
+    }
+    out
+}
+
+pub fn emit_manifest(schema: &Schema) -> String {
+    let mut out = String::new();
+    out.push_str(HEADER);
+    out.push_str(
+        "\n/// A registered MCP tool: name, params type, description and group.\n\
+         /// This is the SSOT-derived surface; the router in `server.rs` must expose\n\
+         /// exactly these tools (transparency guard).\n\
+         #[derive(Debug, Clone, Copy)]\n\
+         pub struct ToolDef {\n\
+         \x20   pub name: &'static str,\n\
+         \x20   pub params: &'static str,\n\
+         \x20   pub description: &'static str,\n\
+         \x20   pub group: &'static str,\n\
+         }\n\n\
+         pub const TOOLS: &[ToolDef] = &[\n",
+    );
+    for t in &schema.tools {
+        out.push_str(&format!(
+            "    ToolDef {{ name: \"{}\", params: \"{}\", description: \"{}\", group: \"{}\" }},\n",
+            rust_str(&t.name),
+            rust_str(&t.params),
+            rust_str(&t.description),
+            rust_str(&t.group),
+        ));
+    }
+    out.push_str("];\n");
+    out
+}

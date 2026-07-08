@@ -1,6 +1,6 @@
 /// 山中湖別荘 B-1 を DXF に出力（UTF-8 + Shift-JIS 両方）
 use cad_core::*;
-use cad_dxf::{DxfEncoding, DxfExporter};
+use cad_dxf::DxfExporter;
 use std::fs::File;
 use std::io::BufWriter;
 

@@ -1,0 +1,38 @@
+[package]
+name = "cad-app"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "gfp-cad interactive CAD editor (winit + wgpu)"
+
+[dependencies]
+cad-core = { path = "../cad-core" }
+cad-dxf  = { path = "../cad-dxf" }
+uuid     = { workspace = true }
+
+# --- GUI stack (version-locked: glyphon 0.11 requires wgpu ^29) ---
+winit   = "0.30"
+wgpu    = "29"
+glyphon = "0.11"
+lyon    = "1.0"
+
+bytemuck = { version = "1", features = ["derive"] }
+pollster = "0.4"
+raw-window-handle = "0.6"
+
+serde      = { workspace = true }
+serde_json = "1"
+anyhow     = { workspace = true }
+rfd        = "0.15"
+log        = "0.4"
+env_logger = "0.11"
+
+# --- cloud / LLM sharing (feature-gated; keep GUI offline by default) ---
+cad-mcp = { path = "../cad-mcp", optional = true }
+cad-db  = { path = "../cad-db",  optional = true }
+tokio   = { version = "1", optional = true, features = ["rt-multi-thread", "macros"] }
+
+[features]
+default   = []
+share-mcp = ["dep:cad-mcp", "dep:tokio"]
+cloud     = ["dep:cad-db", "dep:tokio"]

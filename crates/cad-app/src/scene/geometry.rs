@@ -1,0 +1,247 @@
+//! Model -> tessellated GPU geometry. Pure (no winit/wgpu state beyond Vertex).
+//!
+//! Draw order (painter, no depth test): grid, room fills, walls, openings.
+
+use cad_core::{Building, Floor, Opening, Wall};
+use lyon::math::point;
+use lyon::path::Path;
+use lyon::tessellation::{BuffersBuilder, FillOptions, FillTessellator, FillVertex, VertexBuffers};
+
+use crate::config;
+use crate::document::Selection;
+use crate::gpu::Vertex;
+
+type Geo = VertexBuffers<Vertex, u32>;
+
+/// Highlight geometry for the current selection (drawn over the model, world space).
+pub fn build_overlay(floor: &Floor, sel: Selection) -> Geo {
+    let mut g: Geo = VertexBuffers::new();
+    match sel {
+        Selection::Wall(id) => {
+            if let Some(w) = floor.walls.iter().find(|w| w.id == id) {
+                wall_rect(&mut g, w, &floor.walls, config::SEL);
+            }
+        }
+        Selection::Opening(id) => {
+            if let Some(o) = floor.openings.iter().find(|o| o.id == id) {
+                opening_rect(&mut g, floor, o, config::SEL);
+            }
+        }
+        Selection::Room(id) => {
+            if let Some(r) = floor.rooms.iter().find(|r| r.id == id) {
+                fill_polygon(&mut g, &r.boundary, config::SEL);
+            }
+        }
+        Selection::None => {}
+    }
+    g
+}
+
+pub fn build(building: &Building, floor_idx: usize) -> Geo {
+    let mut g: Geo = VertexBuffers::new();
+
+    let bbox = padded_bounds(building, floor_idx);
+    grid(&mut g, building, bbox);
+
+    if let Some(floor) = building.floors.get(floor_idx) {
+        for room in &floor.rooms {
+            fill_polygon(&mut g, &room.boundary, config::ROOM_FILL);
+        }
+        // Interior walls first, then the (brighter) exterior shell on top: where an
+        // interior wall shares an L-corner with an exterior wall, both mitre-extend
+        // and overlap — drawing the exterior last keeps the shell colour on top.
+        for wall in floor.walls.iter().filter(|w| !w.is_exterior) {
+            wall_body(&mut g, wall, &floor.walls);
+        }
+        for wall in floor.walls.iter().filter(|w| w.is_exterior) {
+            wall_body(&mut g, wall, &floor.walls);
+        }
+        for opening in &floor.openings {
+            opening_mark(&mut g, floor, opening);
+        }
+    }
+    g
+}
+
+fn grid(g: &mut Geo, building: &Building, bbox: [f64; 4]) {
+    let hw = config::GRID_HALF_W;
+    for a in &building.grid.x_axes {
+        push_line(
+            g,
+            [a.position, bbox[1]],
+            [a.position, bbox[3]],
+            hw,
+            config::GRID,
+        );
+    }
+    for a in &building.grid.y_axes {
+        push_line(
+            g,
+            [bbox[0], a.position],
+            [bbox[2], a.position],
+            hw,
+            config::GRID,
+        );
+    }
+}
+
+fn wall_body(g: &mut Geo, wall: &Wall, walls: &[Wall]) {
+    let color = if wall.is_exterior {
+        config::WALL_EXT
+    } else {
+        config::WALL_INT
+    };
+    wall_rect(g, wall, walls, color);
+}
+
+/// Push a wall's face rectangle in `color`. An end is extended by half-thickness
+/// along the centreline **only where another wall shares that endpoint** (an
+/// L-corner) so orthogonal corners mitre cleanly; a free end keeps its exact
+/// length (no stub), and a T-junction end (which meets another wall's *span*,
+/// not its endpoint) is not extended (so it can't poke through the shell).
+/// Render-only — the exact face (`Wall::face_quad`) is what DXF/AutoCAD use.
+fn wall_rect(g: &mut Geo, wall: &Wall, walls: &[Wall], color: u32) {
+    let dx = wall.end.x - wall.start.x;
+    let dy = wall.end.y - wall.start.y;
+    let len = (dx * dx + dy * dy).sqrt();
+    if len < 0.1 {
+        return;
+    }
+    let t = wall.thickness / 2.0;
+    let (ux, uy) = (dx / len, dy / len); // along centreline
+    let (nx, ny) = (-uy * t, ux * t); // perpendicular, half-thickness
+    let ext_s = if shares_endpoint(walls, wall, wall.start) {
+        t
+    } else {
+        0.0
+    };
+    let ext_e = if shares_endpoint(walls, wall, wall.end) {
+        t
+    } else {
+        0.0
+    };
+    let sx = wall.start.x - ux * ext_s;
+    let sy = wall.start.y - uy * ext_s;
+    let ex = wall.end.x + ux * ext_e;
+    let ey = wall.end.y + uy * ext_e;
+    push_quad(
+        g,
+        [
+            [sx + nx, sy + ny],
+            [ex + nx, ey + ny],
+            [ex - nx, ey - ny],
+            [sx - nx, sy - ny],
+        ],
+        color,
+    );
+}
+
+/// True if any *other* wall has an endpoint coincident with `p` (~1mm).
+fn shares_endpoint(walls: &[Wall], wall: &Wall, p: cad_core::Point2D) -> bool {
+    let near = |a: cad_core::Point2D| (a.x - p.x).abs() < 1.0 && (a.y - p.y).abs() < 1.0;
+    walls
+        .iter()
+        .any(|w| w.id != wall.id && (near(w.start) || near(w.end)))
+}
+
+fn opening_mark(g: &mut Geo, floor: &Floor, opening: &Opening) {
+    opening_rect(g, floor, opening, config::OPENING);
+}
+
+fn opening_rect(g: &mut Geo, floor: &Floor, opening: &Opening, color: u32) {
+    let Some(wall) = floor.walls.iter().find(|w| w.id == opening.wall_id) else {
+        return;
+    };
+    let (dx, dy) = (wall.end.x - wall.start.x, wall.end.y - wall.start.y);
+    let len = (dx * dx + dy * dy).sqrt();
+    if len < 0.1 {
+        return;
+    }
+    let (ux, uy) = (dx / len, dy / len);
+    let (nx, ny) = (-uy, ux);
+    let cx = wall.start.x + ux * opening.position;
+    let cy = wall.start.y + uy * opening.position;
+    let hw = opening.width / 2.0;
+    let t = wall.thickness / 2.0 + 10.0; // slightly proud of the wall
+    push_quad(
+        g,
+        [
+            [cx - ux * hw + nx * t, cy - uy * hw + ny * t],
+            [cx + ux * hw + nx * t, cy + uy * hw + ny * t],
+            [cx + ux * hw - nx * t, cy + uy * hw - ny * t],
+            [cx - ux * hw - nx * t, cy - uy * hw - ny * t],
+        ],
+        color,
+    );
+}
+
+/// Fill an arbitrary (possibly concave) polygon via lyon.
+fn fill_polygon(g: &mut Geo, boundary: &[cad_core::Point2D], color: u32) {
+    if boundary.len() < 3 {
+        return;
+    }
+    let mut builder = Path::builder();
+    builder.begin(point(boundary[0].x as f32, boundary[0].y as f32));
+    for p in &boundary[1..] {
+        builder.line_to(point(p.x as f32, p.y as f32));
+    }
+    builder.end(true);
+    let path = builder.build();
+
+    let mut tess = FillTessellator::new();
+    let _ = tess.tessellate_path(
+        &path,
+        &FillOptions::tolerance(1.0),
+        &mut BuffersBuilder::new(g, |v: FillVertex| Vertex {
+            pos: v.position().to_array(),
+            color,
+        }),
+    );
+}
+
+/// Append a world-space polyline (open) as thin quads — used for tool previews.
+pub fn push_polyline(g: &mut Geo, pts: &[[f64; 2]], hw: f64, color: u32) {
+    for seg in pts.windows(2) {
+        push_line(g, seg[0], seg[1], hw, color);
+    }
+}
+
+/// A line segment as a rectangle of half-width `hw` (world mm).
+fn push_line(g: &mut Geo, a: [f64; 2], b: [f64; 2], hw: f64, color: u32) {
+    let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+    let len = (dx * dx + dy * dy).sqrt();
+    if len < 1e-6 {
+        return;
+    }
+    let (nx, ny) = (-dy / len * hw, dx / len * hw);
+    push_quad(
+        g,
+        [
+            [a[0] + nx, a[1] + ny],
+            [b[0] + nx, b[1] + ny],
+            [b[0] - nx, b[1] - ny],
+            [a[0] - nx, a[1] - ny],
+        ],
+        color,
+    );
+}
+
+/// Push a convex quad (CCW or CW) as two triangles.
+fn push_quad(g: &mut Geo, corners: [[f64; 2]; 4], color: u32) {
+    let base = g.vertices.len() as u32;
+    for c in corners {
+        g.vertices.push(Vertex {
+            pos: [c[0] as f32, c[1] as f32],
+            color,
+        });
+    }
+    g.indices
+        .extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
+}
+
+/// Model bounds with a margin so grid lines extend a little past the plan.
+fn padded_bounds(building: &Building, floor_idx: usize) -> [f64; 4] {
+    let b = super::bounds::model_bounds(building, floor_idx);
+    let pad = 1000.0;
+    [b[0] - pad, b[1] - pad, b[2] + pad, b[3] + pad]
+}
