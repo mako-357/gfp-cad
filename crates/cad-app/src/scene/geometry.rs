@@ -47,9 +47,9 @@ pub fn build(building: &Building, floor_idx: usize) -> Geo {
         for room in &floor.rooms {
             fill_polygon(&mut g, &room.boundary, config::ROOM_FILL);
         }
-        // Interior walls first, then the (brighter) exterior shell on top — so an
-        // interior wall's mitre extension into an exterior wall at a T-junction is
-        // painted over cleanly.
+        // Interior walls first, then the (brighter) exterior shell on top: where an
+        // interior wall shares an L-corner with an exterior wall, both mitre-extend
+        // and overlap — drawing the exterior last keeps the shell colour on top.
         for wall in floor.walls.iter().filter(|w| !w.is_exterior) {
             wall_body(&mut g, wall, &floor.walls);
         }

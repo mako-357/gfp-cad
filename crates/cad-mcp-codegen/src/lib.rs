@@ -216,32 +216,53 @@ fn is_ident(s: &str) -> bool {
 /// [`crate`] の test が突き合わせるのに使う（description の二重管理 drift を防ぐ）。
 pub fn parse_server_tools(src: &str) -> Result<Vec<(String, String)>> {
     // `#[tool(` のみ対象（`#[tool_router]` / `#[tool_handler]` は括弧が無いので除外）。
+    // さらに「行頭(インデント除く)が `#[tool(`」に限定し、文字列/コメント中の
+    // 偶発的な `#[tool(` を phantom tool として拾わない。
     let mut out = Vec::new();
-    let mut rest = src;
-    while let Some(i) = rest.find("#[tool(") {
-        rest = &rest[i + "#[tool(".len()..];
-        let end = rest.find(")]").context("#[tool(...)] の閉じ `)]` が無い")?;
-        let attr = &rest[..end];
-        rest = &rest[end + 2..];
+    let mut from = 0;
+    while let Some(rel) = src[from..].find("#[tool(") {
+        let at = from + rel;
+        let line_start = src[..at].rfind('\n').map(|i| i + 1).unwrap_or(0);
+        let line_anchored = src[line_start..at].chars().all(|c| c == ' ' || c == '\t');
+
+        let after_open = at + "#[tool(".len();
+        let end_rel = src[after_open..]
+            .find(")]")
+            .context("#[tool(...)] の閉じ `)]` が無い")?;
+        let attr = &src[after_open..after_open + end_rel];
+        from = after_open + end_rel + 2;
+        if !line_anchored {
+            continue;
+        }
         let name =
-            attr_str(attr, "name").with_context(|| format!("#[tool] に name が無い: {attr:?}"))?;
-        let desc = attr_str(attr, "description")
+            attr_kv(attr, "name").with_context(|| format!("#[tool] に name が無い: {attr:?}"))?;
+        let desc = attr_kv(attr, "description")
             .with_context(|| format!("#[tool] に description が無い: {attr:?}"))?;
         out.push((name, desc));
     }
     Ok(out)
 }
 
-/// `key = "value"` の value を取り出す（value 内に `"` は含まれない前提）。
-fn attr_str(attr: &str, key: &str) -> Option<String> {
-    let i = attr.find(key)?;
-    let after = &attr[i + key.len()..];
-    let eq = after.find('=')?;
-    let after_eq = &after[eq + 1..];
-    let open = after_eq.find('"')? + 1;
-    let body = &after_eq[open..];
-    let close = body.find('"')?;
-    Some(body[..close].to_string())
+/// `key = "value"` の value を取り出す。`key` は単語境界で照合し（"name" が
+/// "rename" 等に部分一致しない）、属性の記載順にも依存しない。value 内に `"` は
+/// 含まれない前提。
+fn attr_kv(attr: &str, key: &str) -> Option<String> {
+    let mut from = 0;
+    while let Some(rel) = attr[from..].find(key) {
+        let i = from + rel;
+        let boundary_ok = attr[..i]
+            .chars()
+            .next_back()
+            .is_none_or(|c| !(c.is_ascii_alphanumeric() || c == '_'));
+        let after = attr[i + key.len()..].trim_start();
+        if boundary_ok && let Some(rhs) = after.strip_prefix('=') {
+            let body = rhs.trim_start().strip_prefix('"')?;
+            let close = body.find('"')?;
+            return Some(body[..close].to_string());
+        }
+        from = i + key.len();
+    }
+    None
 }
 
 // =============================================================================
