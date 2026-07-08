@@ -148,22 +148,16 @@ impl DxfExporter {
                 } else {
                     "GFP_WALL"
                 };
-                let t = wall.thickness / 2.0;
-                let dx = wall.end.x - wall.start.x;
-                let dy = wall.end.y - wall.start.y;
-                let len = (dx * dx + dy * dy).sqrt();
-                if len < 0.1 {
+                // 壁面は cad_core の共有定義(Wall::face_quad)を使う
+                let Some(q) = wall.face_quad() else {
                     continue;
-                }
-                let nx = -dy / len * t;
-                let ny = dx / len * t;
-
+                };
                 dxf.lwpolyline(
                     &[
-                        (wall.start.x + nx, wall.start.y + ny),
-                        (wall.end.x + nx, wall.end.y + ny),
-                        (wall.end.x - nx, wall.end.y - ny),
-                        (wall.start.x - nx, wall.start.y - ny),
+                        (q[0].x, q[0].y),
+                        (q[1].x, q[1].y),
+                        (q[2].x, q[2].y),
+                        (q[3].x, q[3].y),
                     ],
                     true,
                     layer,

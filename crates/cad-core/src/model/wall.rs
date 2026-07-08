@@ -67,4 +67,27 @@ impl Wall {
         let h = self.height.unwrap_or(floor_height);
         self.length() * h / 1_000_000.0
     }
+
+    /// 壁芯を厚み分オフセットした面の4隅 (start±n, end±n, mm)。
+    ///
+    /// これが「壁の面とは何か」の唯一の定義。描画(cad-app / cad-acad)と
+    /// DXF 出力(cad-dxf)はすべてこれを共有し、法線式の重複を避ける。
+    /// 退化した壁(長さ≈0)では `None`。
+    pub fn face_quad(&self) -> Option<[Point2D; 4]> {
+        let dx = self.end.x - self.start.x;
+        let dy = self.end.y - self.start.y;
+        let len = (dx * dx + dy * dy).sqrt();
+        if len < 0.1 {
+            return None;
+        }
+        let t = self.thickness / 2.0;
+        let nx = -dy / len * t;
+        let ny = dx / len * t;
+        Some([
+            Point2D::new(self.start.x + nx, self.start.y + ny),
+            Point2D::new(self.end.x + nx, self.end.y + ny),
+            Point2D::new(self.end.x - nx, self.end.y - ny),
+            Point2D::new(self.start.x - nx, self.start.y - ny),
+        ])
+    }
 }

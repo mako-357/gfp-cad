@@ -201,26 +201,16 @@ impl AcadRenderer {
                 "GFP_WALL"
             };
 
-            let s = Point2D::new(ox + wall.start.x, oy + wall.start.y);
-            let e = Point2D::new(ox + wall.end.x, oy + wall.end.y);
-            let t = wall.thickness / 2.0;
-
-            // 壁の方向ベクトル
-            let dx = e.x - s.x;
-            let dy = e.y - s.y;
-            let len = (dx * dx + dy * dy).sqrt();
-            if len < 0.1 {
+            // 壁面は cad_core の共有定義(Wall::face_quad)を使う。原点オフセット
+            // (ox, oy) は平行移動なので各隅に足すだけでよい。
+            let Some(q) = wall.face_quad() else {
                 continue;
-            }
-            let nx = -dy / len * t; // 法線方向
-            let ny = dx / len * t;
-
-            // 壁を閉じたポリラインで描画（壁芯から両側に厚みを振る）
+            };
             let pts = vec![
-                vec![s.x + nx, s.y + ny],
-                vec![e.x + nx, e.y + ny],
-                vec![e.x - nx, e.y - ny],
-                vec![s.x - nx, s.y - ny],
+                vec![ox + q[0].x, oy + q[0].y],
+                vec![ox + q[1].x, oy + q[1].y],
+                vec![ox + q[2].x, oy + q[2].y],
+                vec![ox + q[3].x, oy + q[3].y],
             ];
             bridge::send(
                 "draw_polyline",
