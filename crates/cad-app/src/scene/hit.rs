@@ -60,7 +60,9 @@ pub fn pick(floor: &Floor, world: [f64; 2], tol: f64) -> Selection {
         }
     }
     for r in &floor.rooms {
-        if point_in_polygon(world, &r.boundary) {
+        if let Some(poly) = floor.room_boundary(r)
+            && point_in_polygon(world, &poly)
+        {
             return Selection::Room(r.id);
         }
     }

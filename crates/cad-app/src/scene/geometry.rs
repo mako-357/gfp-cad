@@ -28,8 +28,10 @@ pub fn build_overlay(floor: &Floor, sel: Selection) -> Geo {
             }
         }
         Selection::Room(id) => {
-            if let Some(r) = floor.rooms.iter().find(|r| r.id == id) {
-                fill_polygon(&mut g, &r.boundary, config::SEL);
+            if let Some(r) = floor.rooms.iter().find(|r| r.id == id)
+                && let Some(poly) = floor.room_boundary(r)
+            {
+                fill_polygon(&mut g, &poly, config::SEL);
             }
         }
         Selection::None => {}
@@ -45,7 +47,10 @@ pub fn build(building: &Building, floor_idx: usize) -> Geo {
 
     if let Some(floor) = building.floors.get(floor_idx) {
         for room in &floor.rooms {
-            fill_polygon(&mut g, &room.boundary, config::ROOM_FILL);
+            // 部屋の境界は壁グラフの面から導出（未囲いなら塗らない）。
+            if let Some(poly) = floor.room_boundary(room) {
+                fill_polygon(&mut g, &poly, config::ROOM_FILL);
+            }
         }
         // Interior walls first, then the (brighter) exterior shell on top: where an
         // interior wall shares an L-corner with an exterior wall, both mitre-extend

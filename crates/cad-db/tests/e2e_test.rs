@@ -61,16 +61,22 @@ async fn test_full_workflow() {
     let mut bldg = Building::new("E2E House");
     bldg.grid.x_axes = vec![GridAxis::new("A", 0.0), GridAxis::new("B", 6000.0)];
     let mut floor = Floor::new("1F", 200.0, 3000.0);
+    // 6000×5000 を4壁で囲む（面が導出され面積 30sqm）。
     floor.add_wall(Point2D::new(0.0, 0.0), Point2D::new(6000.0, 0.0), 150.0);
-    floor.rooms.push(Room::new(
-        "リビング",
-        vec![
-            Point2D::new(0.0, 0.0),
-            Point2D::new(6000.0, 0.0),
-            Point2D::new(6000.0, 5000.0),
-            Point2D::new(0.0, 5000.0),
-        ],
-    ));
+    floor.add_wall(
+        Point2D::new(6000.0, 0.0),
+        Point2D::new(6000.0, 5000.0),
+        150.0,
+    );
+    floor.add_wall(
+        Point2D::new(6000.0, 5000.0),
+        Point2D::new(0.0, 5000.0),
+        150.0,
+    );
+    floor.add_wall(Point2D::new(0.0, 5000.0), Point2D::new(0.0, 0.0), 150.0);
+    floor
+        .rooms
+        .push(Room::new("リビング", Point2D::new(3000.0, 2500.0)));
     bldg.add_floor(floor);
 
     let record = db
@@ -88,7 +94,7 @@ async fn test_full_workflow() {
     let loaded = db.load_building(bldg_id).await.expect("Load building");
     assert_eq!(loaded.name, "E2E House");
     assert_eq!(loaded.floors.len(), 1);
-    assert_eq!(loaded.floors[0].walls.len(), 1);
+    assert_eq!(loaded.floors[0].walls.len(), 4);
     assert_eq!(loaded.floors[0].rooms[0].name, "リビング");
     let area = loaded.total_floor_area();
     assert!(

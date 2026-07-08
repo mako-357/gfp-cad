@@ -56,16 +56,11 @@ pub struct AddOpeningInput {
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct PointInput {
-    pub x: f64,
-    pub y: f64,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
 pub struct AddRoomInput {
     pub floor: String,
     pub name: String,
-    pub boundary: Vec<PointInput>,
+    pub seed_x: f64,
+    pub seed_y: f64,
     pub floor_finish: Option<String>,
     pub floor_heating: Option<bool>,
 }

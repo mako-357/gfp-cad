@@ -181,9 +181,6 @@ impl State {
             Preview::Segment(a, b) => {
                 scene::geometry::push_polyline(&mut geo, &[a, b], hw, config::PREVIEW);
             }
-            Preview::Polyline(pts) => {
-                scene::geometry::push_polyline(&mut geo, &pts, hw, config::PREVIEW);
-            }
         }
         self.renderer
             .upload_overlay(&self.gpu.device, &self.gpu.queue, &geo);
@@ -464,8 +461,8 @@ fn inspector_text(floor: &cad_core::Floor, sel: Selection) -> Option<String> {
             Some(format!(
                 "部屋\n名前: {}\n面積: {:.2} ㎡\n周長: {:.0} mm",
                 r.name,
-                r.area(),
-                r.perimeter(),
+                floor.room_area(r).unwrap_or(0.0),
+                floor.room_perimeter(r).unwrap_or(0.0),
             ))
         }
     }

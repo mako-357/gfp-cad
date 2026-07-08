@@ -93,58 +93,23 @@ fn build_yamanakako() -> Building {
         .push(Opening::window(we_id, 5000.0, 1600.0, 1200.0, 800.0));
 
     // 部屋
-    let mut living = Room::new(
-        "リビング",
-        vec![
-            Point2D::new(6523.0, 0.0),
-            Point2D::new(12857.0, 0.0),
-            Point2D::new(12857.0, 2875.0),
-            Point2D::new(6523.0, 2875.0),
-        ],
-    );
+    // 重心: (6523,0),(12857,0),(12857,2875),(6523,2875) → (9690, 1437.5)
+    let mut living = Room::new("リビング", Point2D::new(9690.0, 1437.5));
     living.has_floor_heating = true;
 
-    let mut dk = Room::new(
-        "DK",
-        vec![
-            Point2D::new(0.0, 0.0),
-            Point2D::new(6523.0, 0.0),
-            Point2D::new(6523.0, 2875.0),
-            Point2D::new(0.0, 2875.0),
-        ],
-    );
+    // 重心: (0,0),(6523,0),(6523,2875),(0,2875) → (3261.5, 1437.5)
+    let mut dk = Room::new("DK", Point2D::new(3261.5, 1437.5));
     dk.has_floor_heating = true;
 
-    let mut main_room = Room::new(
-        "メインルーム",
-        vec![
-            Point2D::new(0.0, 2875.0),
-            Point2D::new(12857.0, 2875.0),
-            Point2D::new(12857.0, 8957.0),
-            Point2D::new(0.0, 8957.0),
-        ],
-    );
+    // 重心: (0,2875),(12857,2875),(12857,8957),(0,8957) → (6428.5, 5916)
+    let mut main_room = Room::new("メインルーム", Point2D::new(6428.5, 5916.0));
     main_room.has_floor_heating = true;
 
-    let utility = Room::new(
-        "ユーティリティ",
-        vec![
-            Point2D::new(0.0, 8957.0),
-            Point2D::new(6523.0, 8957.0),
-            Point2D::new(6523.0, 10680.0),
-            Point2D::new(0.0, 10680.0),
-        ],
-    );
+    // 重心: (0,8957),(6523,8957),(6523,10680),(0,10680) → (3261.5, 9818.5)
+    let utility = Room::new("ユーティリティ", Point2D::new(3261.5, 9818.5));
 
-    let bedroom = Room::new(
-        "寝室",
-        vec![
-            Point2D::new(6523.0, 8957.0),
-            Point2D::new(12857.0, 8957.0),
-            Point2D::new(12857.0, 10680.0),
-            Point2D::new(6523.0, 10680.0),
-        ],
-    );
+    // 重心: (6523,8957),(12857,8957),(12857,10680),(6523,10680) → (9690, 9818.5)
+    let bedroom = Room::new("寝室", Point2D::new(9690.0, 9818.5));
 
     f1.rooms = vec![living, dk, main_room, utility, bedroom];
     bldg.add_floor(f1);

@@ -50,19 +50,24 @@ fn test_wall() {
 
 #[test]
 fn test_room_area() {
-    // 6.3m × 6.1m の部屋
-    let room = Room::new(
-        "リビング",
-        vec![
-            Point2D::new(0.0, 0.0),
-            Point2D::new(6334.0, 0.0),
-            Point2D::new(6334.0, 6082.0),
-            Point2D::new(0.0, 6082.0),
-        ],
+    // 6334×6082 の矩形を壁で囲み、内部シードから面積・周長を導出。
+    let mut floor = Floor::new("1F", 200.0, 3000.0);
+    floor.add_wall(Point2D::new(0.0, 0.0), Point2D::new(6334.0, 0.0), 100.0);
+    floor.add_wall(
+        Point2D::new(6334.0, 0.0),
+        Point2D::new(6334.0, 6082.0),
+        100.0,
     );
-    // 面積: 6.334m × 6.082m = 38.5 sqm
-    assert!((room.area() - 38.5).abs() < 0.5);
-    assert!((room.perimeter() - 24832.0).abs() < 1.0);
+    floor.add_wall(
+        Point2D::new(6334.0, 6082.0),
+        Point2D::new(0.0, 6082.0),
+        100.0,
+    );
+    floor.add_wall(Point2D::new(0.0, 6082.0), Point2D::new(0.0, 0.0), 100.0);
+    let room = Room::new("リビング", Point2D::new(3000.0, 3000.0));
+    // 面積: 6.334m × 6.082m = 38.5 sqm（壁芯基準）
+    assert!((floor.room_area(&room).unwrap() - 38.5).abs() < 0.5);
+    assert!((floor.room_perimeter(&room).unwrap() - 24832.0).abs() < 1.0);
 }
 
 #[test]
@@ -79,27 +84,36 @@ fn test_opening() {
 
 #[test]
 fn test_floor_area() {
+    // 9000×5000 の外周を X=6000 の仕切りで2分割（左 30sqm / 右 15sqm）。
     let mut floor = Floor::new("1F", 200.0, 3000.0);
     assert_eq!(floor.ceiling_height, 2700.0);
 
-    floor.rooms.push(Room::new(
-        "リビング",
-        vec![
-            Point2D::new(0.0, 0.0),
-            Point2D::new(6000.0, 0.0),
-            Point2D::new(6000.0, 5000.0),
-            Point2D::new(0.0, 5000.0),
-        ],
-    ));
-    floor.rooms.push(Room::new(
-        "キッチン",
-        vec![
-            Point2D::new(6000.0, 0.0),
-            Point2D::new(9000.0, 0.0),
-            Point2D::new(9000.0, 5000.0),
-            Point2D::new(6000.0, 5000.0),
-        ],
-    ));
+    // 外周
+    floor.add_wall(Point2D::new(0.0, 0.0), Point2D::new(9000.0, 0.0), 100.0);
+    floor.add_wall(
+        Point2D::new(9000.0, 0.0),
+        Point2D::new(9000.0, 5000.0),
+        100.0,
+    );
+    floor.add_wall(
+        Point2D::new(9000.0, 5000.0),
+        Point2D::new(0.0, 5000.0),
+        100.0,
+    );
+    floor.add_wall(Point2D::new(0.0, 5000.0), Point2D::new(0.0, 0.0), 100.0);
+    // 仕切り（端点は外周スパン上＝T字。planarize で連結）
+    floor.add_wall(
+        Point2D::new(6000.0, 0.0),
+        Point2D::new(6000.0, 5000.0),
+        100.0,
+    );
+
+    floor
+        .rooms
+        .push(Room::new("リビング", Point2D::new(3000.0, 2500.0)));
+    floor
+        .rooms
+        .push(Room::new("キッチン", Point2D::new(7500.0, 2500.0)));
 
     // 30sqm + 15sqm = 45sqm
     assert!((floor.area() - 45.0).abs() < 0.1);

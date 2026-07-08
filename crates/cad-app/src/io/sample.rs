@@ -51,25 +51,10 @@ pub fn building() -> Building {
     f.openings
         .push(Opening::door(partition_id, 4000.0, 800.0, 2000.0));
 
-    // Rooms.
-    f.rooms.push(Room::new(
-        "LDK",
-        vec![
-            Point2D::new(0.0, 0.0),
-            Point2D::new(5000.0, 0.0),
-            Point2D::new(5000.0, 8000.0),
-            Point2D::new(0.0, 8000.0),
-        ],
-    ));
-    f.rooms.push(Room::new(
-        "寝室",
-        vec![
-            Point2D::new(5000.0, 0.0),
-            Point2D::new(10000.0, 0.0),
-            Point2D::new(10000.0, 8000.0),
-            Point2D::new(5000.0, 8000.0),
-        ],
-    ));
+    // Rooms — シード点（囲まれた面から境界・面積を導出）。
+    f.rooms.push(Room::new("LDK", Point2D::new(2500.0, 4000.0)));
+    f.rooms
+        .push(Room::new("寝室", Point2D::new(7500.0, 4000.0)));
 
     b.add_floor(f);
     b

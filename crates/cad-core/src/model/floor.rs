@@ -51,9 +51,48 @@ impl Floor {
         }
     }
 
-    /// 床面積の合計 (sqm)
+    /// 床面積の合計 (sqm) — 各部屋の導出面積の総和。
     pub fn area(&self) -> f64 {
-        self.rooms.iter().map(|r| r.area()).sum()
+        self.rooms.iter().filter_map(|r| self.room_area(r)).sum()
+    }
+
+    // === 面（部屋）の導出 ===
+
+    /// 壁グラフの有界面（部屋候補）を導出する。外部の非有界面（符号付き面積が負）は除く。
+    pub fn faces(&self) -> Vec<crate::Face> {
+        crate::topology::faces(&self.nodes, &self.walls, NODE_MERGE_TOL)
+            .into_iter()
+            .filter(|f| f.area > 1.0) // 正の有界面のみ（外部=負・退化=0 を除外）
+            .collect()
+    }
+
+    /// 点を含む最小の有界面（入れ子時は内側）。
+    pub fn face_at(&self, p: Point2D) -> Option<crate::Face> {
+        self.faces()
+            .into_iter()
+            .filter(|f| crate::topology::point_in_polygon(p, &f.polygon))
+            .min_by(|a, b| a.area.total_cmp(&b.area))
+    }
+
+    /// 部屋の境界ポリゴン（シードを含む面）。未囲い（外部に落ちた）なら `None`。
+    pub fn room_boundary(&self, room: &Room) -> Option<Vec<Point2D>> {
+        self.face_at(room.seed).map(|f| f.polygon)
+    }
+
+    /// 部屋の床面積 (sqm)。
+    pub fn room_area(&self, room: &Room) -> Option<f64> {
+        self.face_at(room.seed).map(|f| f.area.abs() / 1_000_000.0)
+    }
+
+    /// 部屋の周長 (mm)。
+    pub fn room_perimeter(&self, room: &Room) -> Option<f64> {
+        let poly = self.room_boundary(room)?;
+        let n = poly.len();
+        Some(
+            (0..n)
+                .map(|i| poly[i].distance_to(&poly[(i + 1) % n]))
+                .sum(),
+        )
     }
 
     // === ノードグラフ ===

@@ -34,24 +34,21 @@ impl Tool {
 #[derive(Default)]
 pub struct ToolState {
     wall_start: Option<[f64; 2]>,
-    room_pts: Vec<[f64; 2]>,
 }
 
-/// A preview polyline/point the overlay can draw while a tool is mid-action.
+/// A preview the overlay can draw while a tool is mid-action.
 pub enum Preview {
     None,
     Segment([f64; 2], [f64; 2]),
-    Polyline(Vec<[f64; 2]>),
 }
 
 impl ToolState {
     pub fn cancel(&mut self) {
         self.wall_start = None;
-        self.room_pts.clear();
     }
 
     pub fn is_active(&self) -> bool {
-        self.wall_start.is_some() || !self.room_pts.is_empty()
+        self.wall_start.is_some()
     }
 
     /// Left-click at a snapped world point. Returns a new selection if something was created.
@@ -64,11 +61,8 @@ impl ToolState {
         }
     }
 
-    /// Enter / double-click: finalize the current multi-point action (rooms).
-    pub fn on_commit(&mut self, tool: Tool, doc: &mut Document) -> Option<Selection> {
-        if tool == Tool::AddRoom {
-            return self.finish_room(doc);
-        }
+    /// Enter: 現状 multi-point の確定操作は無い（部屋はシード1クリックで完結）。
+    pub fn on_commit(&mut self, _tool: Tool, _doc: &mut Document) -> Option<Selection> {
         None
     }
 
@@ -78,11 +72,6 @@ impl ToolState {
                 Some(s) => Preview::Segment(s, cursor),
                 None => Preview::None,
             },
-            Tool::AddRoom if !self.room_pts.is_empty() => {
-                let mut pts = self.room_pts.clone();
-                pts.push(cursor);
-                Preview::Polyline(pts)
-            }
             _ => Preview::None,
         }
     }
@@ -107,23 +96,20 @@ impl ToolState {
         }
     }
 
+    /// 囲まれた領域内を1クリック → その面にシードを置いて部屋を作る（Revit 流）。
+    /// 壁で囲まれていない点なら何もしない。
     fn click_room(&mut self, doc: &mut Document, p: [f64; 2]) -> Option<Selection> {
-        // Click near the first vertex closes and commits the polygon.
-        if self.room_pts.len() >= 3 && dist(self.room_pts[0], p) < 300.0 {
-            return self.finish_room(doc);
-        }
-        self.room_pts.push(p);
-        None
-    }
-
-    fn finish_room(&mut self, doc: &mut Document) -> Option<Selection> {
-        if self.room_pts.len() < 3 {
-            self.room_pts.clear();
-            return None;
-        }
-        let pts = std::mem::take(&mut self.room_pts);
         let floor_idx = doc.active_floor;
-        let id = doc.edit(|b| add_room(b, floor_idx, pts));
+        let enclosed = doc
+            .building
+            .floors
+            .get(floor_idx)
+            .and_then(|f| f.face_at(Point2D::new(p[0], p[1])))
+            .is_some();
+        if !enclosed {
+            return None; // 未囲いの点はミス扱い
+        }
+        let id = doc.edit(|b| add_room(b, floor_idx, p));
         id.map(Selection::Room)
     }
 
@@ -154,11 +140,10 @@ fn add_wall(b: &mut Building, floor_idx: usize, a: [f64; 2], c: [f64; 2]) -> Opt
     Some(f.add_wall(Point2D::new(a[0], a[1]), Point2D::new(c[0], c[1]), 100.0))
 }
 
-fn add_room(b: &mut Building, floor_idx: usize, pts: Vec<[f64; 2]>) -> Option<uuid::Uuid> {
+fn add_room(b: &mut Building, floor_idx: usize, seed: [f64; 2]) -> Option<uuid::Uuid> {
     let f = b.floors.get_mut(floor_idx)?;
-    let boundary: Vec<Point2D> = pts.iter().map(|p| Point2D::new(p[0], p[1])).collect();
     let n = f.rooms.len() + 1;
-    let room = Room::new(format!("Room {n}"), boundary);
+    let room = Room::new(format!("Room {n}"), Point2D::new(seed[0], seed[1]));
     let id = room.id;
     f.rooms.push(room);
     Some(id)

@@ -29,10 +29,9 @@ pub fn model_bounds(building: &Building, floor_idx: usize) -> [f64; 4] {
                 acc(b.x, b.y);
             }
         }
+        // 部屋境界は壁から導出されるので壁で既にカバーされる。念のためシード点も含める。
         for r in &floor.rooms {
-            for p in &r.boundary {
-                acc(p.x, p.y);
-            }
+            acc(r.seed.x, r.seed.y);
         }
     }
 
