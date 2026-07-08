@@ -173,7 +173,9 @@ fn rust_str(s: &str) -> String {
 pub fn emit_params(schema: &Schema) -> String {
     let mut out = String::new();
     out.push_str(HEADER);
-    out.push_str("\nuse schemars::JsonSchema;\nuse serde::Deserialize;\n");
+    // JsonSchema は rmcp の再エクスポート経由で derive する。rmcp(1.8)は schemars 1.x を
+    // 使うため、スタンドアロン schemars 0.8 の JsonSchema では tool の trait 境界を満たさない。
+    out.push_str("\nuse rmcp::schemars::JsonSchema;\nuse serde::Deserialize;\n");
     for r in &schema.records {
         out.push_str("\n#[derive(Debug, Deserialize, JsonSchema)]\n");
         if r.fields.is_empty() {

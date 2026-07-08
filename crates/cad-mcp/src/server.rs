@@ -6,7 +6,7 @@ use cad_db::{CadDbClient, Workspace};
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{ServerCapabilities, ServerInfo};
-use rmcp::{ServerHandler, schemars, tool, tool_handler, tool_router};
+use rmcp::{ServerHandler, tool, tool_handler, tool_router};
 use surrealdb::types::{RecordId, RecordIdKey};
 
 // MCP tool の入力構造体は KDL(SSOT `schema/cad-mcp.kdl`)から生成される。
