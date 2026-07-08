@@ -56,14 +56,13 @@ impl Floor {
     pub fn area(&self) -> f64 {
         use std::collections::HashSet;
         let faces = self.faces();
-        let mut seen: HashSet<Uuid> = HashSet::new();
+        let mut seen: HashSet<Vec<NodeId>> = HashSet::new();
         let mut total = 0.0;
         for r in &self.rooms {
-            if let Some(f) = resolve_seed(&faces, r.seed) {
-                let key = *f.nodes.iter().min().expect("face has nodes");
-                if seen.insert(key) {
-                    total += f.area / 1_000_000.0;
-                }
+            if let Some(f) = resolve_seed(&faces, r.seed)
+                && seen.insert(face_key(&f))
+            {
+                total += f.area / 1_000_000.0;
             }
         }
         total
@@ -182,17 +181,14 @@ impl Floor {
 
         // 未囲い部屋 + 同一面への複数シード。
         let faces = self.faces();
-        let mut claims: std::collections::HashMap<Uuid, Vec<String>> = Default::default();
+        let mut claims: std::collections::HashMap<Vec<NodeId>, Vec<String>> = Default::default();
         for r in &self.rooms {
             match resolve_seed(&faces, r.seed) {
                 None => issues.push(format!(
                     "floor {:?}: 部屋 {:?} のシードが閉領域に無い (未囲い)",
                     self.name, r.name
                 )),
-                Some(f) => claims
-                    .entry(*f.nodes.iter().min().expect("face has nodes"))
-                    .or_default()
-                    .push(r.name.clone()),
+                Some(f) => claims.entry(face_key(&f)).or_default().push(r.name.clone()),
             }
         }
         for names in claims.values().filter(|v| v.len() > 1) {
@@ -288,6 +284,14 @@ impl Floor {
             .find(|w| w.id == id)
             .expect("just added")
     }
+}
+
+/// 面の一意キー = ソート済みノード集合。隣接面はノードを共有するので単一ノードでは
+/// 一意にならない（共有された最小ノードで別々の面が衝突し面積を取りこぼす）。
+fn face_key(f: &crate::Face) -> Vec<NodeId> {
+    let mut k = f.nodes.clone();
+    k.sort();
+    k
 }
 
 /// 点を含む最小の有界面を（事前計算済みの faces から）選ぶ。入れ子時は内側を採る。
