@@ -1,3 +1,4 @@
+mod generated;
 mod server;
 
 use anyhow::Result;

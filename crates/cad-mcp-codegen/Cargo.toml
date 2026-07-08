@@ -1,0 +1,12 @@
+[package]
+name = "cad-mcp-codegen"
+version = "0.1.0"
+edition = "2024"
+description = "KDL(SSOT) → cad-mcp の param 構造体 + tool manifest を生成する build tool"
+
+# 独立クレート: club-kdl だけに依存し、cad-acad(unix-only)を引く cad-mcp とは切り離す。
+# これにより Windows でも `cargo run/test -p cad-mcp-codegen` で codegen を検証できる。
+
+[dependencies]
+club-kdl = "0.11"
+anyhow = { workspace = true }

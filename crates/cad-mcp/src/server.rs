@@ -7,9 +7,10 @@ use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{ServerCapabilities, ServerInfo};
 use rmcp::{ServerHandler, schemars, tool, tool_handler, tool_router};
-use schemars::JsonSchema;
-use serde::Deserialize;
 use surrealdb::types::{RecordId, RecordIdKey};
+
+// MCP tool の入力構造体は KDL(SSOT `schema/cad-mcp.kdl`)から生成される。
+use crate::generated::params::*;
 
 /// SurrealDB v3 では RecordId が Display を実装していないため、手動で文字列化する
 fn rid_to_string(r: &RecordId) -> String {
@@ -53,94 +54,6 @@ impl GfpCadMcpServer {
             db: Arc::new(db),
         }
     }
-}
-
-// --- 入力スキーマ ---
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct CreateBuildingInput {
-    pub name: String,
-    pub usage: Option<String>,
-    pub structure_type: Option<String>,
-}
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct SetGridInput {
-    pub x_axes: Vec<GridAxisInput>,
-    pub y_axes: Vec<GridAxisInput>,
-}
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct GridAxisInput {
-    pub name: String,
-    pub position: f64,
-}
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct AddFloorInput {
-    pub name: String,
-    pub level: f64,
-    pub height: f64,
-    pub ceiling_height: Option<f64>,
-}
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct AddWallInput {
-    pub floor: String,
-    pub x1: f64,
-    pub y1: f64,
-    pub x2: f64,
-    pub y2: f64,
-    pub thickness: f64,
-    pub is_exterior: Option<bool>,
-    pub material: Option<String>,
-    pub height: Option<f64>,
-}
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct AddOpeningInput {
-    pub floor: String,
-    pub wall_id: String,
-    pub position: f64,
-    pub width: f64,
-    pub height: f64,
-    pub sill_height: Option<f64>,
-    pub kind: Option<String>,
-}
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct AddRoomInput {
-    pub floor: String,
-    pub name: String,
-    pub boundary: Vec<PointInput>,
-    pub floor_finish: Option<String>,
-    pub floor_heating: Option<bool>,
-}
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct PointInput {
-    pub x: f64,
-    pub y: f64,
-}
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct EmptyInput {}
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct ExportDxfInput {
-    pub path: String,
-    pub encoding: Option<String>,
-}
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct RenderAutocadInput {
-    pub origin_x: Option<f64>,
-    pub origin_y: Option<f64>,
-}
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct LoginInput {
-    pub provider: String,
-    pub provider_user_id: String,
-    pub email: String,
-    pub name: Option<String>,
-}
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct SelectInput {
-    pub id: String,
-}
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct NameInput {
-    pub name: String,
 }
 
 fn parse_material(s: &str) -> WallMaterial {

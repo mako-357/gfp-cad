@@ -1,0 +1,128 @@
+// cad-mcp tool surface — SSOT (Single Source of Truth).
+//
+// この KDL を唯一の真実として cad-local codegen が生成する:
+//   - crates/cad-mcp/src/generated/params.rs
+//       = 各 record を #[derive(Debug, Deserialize, JsonSchema)] param 構造体に
+//   - crates/cad-mcp/src/generated/manifest.rs
+//       = (tool 名, params 型, description, group) の一覧(将来の tool_router 生成の土台)
+//
+// 生成は `cargo test -p cad-mcp --test tools_codegen` で走り、生成物が最新でなければ
+// テストが落ちる(再生成を強制)。unison-protocol 方式(club-kdl を SSOT parser に、
+// VP-local な emit で Rust を吐く)を cad に適用した第一手。
+//
+// transparent migration: 生成 param 構造体は現行の手書き Input 構造体と
+// フィールド・型・順序・省略性を逐語一致させる(JsonSchema を移行前後で不変に保つ)。
+// このため field には description を持たせない(現行に無いため)。description の
+// 拡充は「意図的な schema 改善」として別サイクルで行う。
+//
+// 語彙:
+//   schema "<ns>" version="x" { record ...; group ... }
+//   record "<StructName>" { field "<name>" type="..." optional=#true }
+//       type: string | f64 | bool | array<RecordName>
+//   group "<name>" { tool "<tool_name>" params="<RecordName>" description="..." }
+
+schema "cad" version="1.0.0" {
+    // === param record 型 ===
+
+    record "CreateBuildingInput" {
+        field "name" type="string"
+        field "usage" type="string" optional=#true
+        field "structure_type" type="string" optional=#true
+    }
+    record "GridAxisInput" {
+        field "name" type="string"
+        field "position" type="f64"
+    }
+    record "SetGridInput" {
+        field "x_axes" type="array<GridAxisInput>"
+        field "y_axes" type="array<GridAxisInput>"
+    }
+    record "AddFloorInput" {
+        field "name" type="string"
+        field "level" type="f64"
+        field "height" type="f64"
+        field "ceiling_height" type="f64" optional=#true
+    }
+    record "AddWallInput" {
+        field "floor" type="string"
+        field "x1" type="f64"
+        field "y1" type="f64"
+        field "x2" type="f64"
+        field "y2" type="f64"
+        field "thickness" type="f64"
+        field "is_exterior" type="bool" optional=#true
+        field "material" type="string" optional=#true
+        field "height" type="f64" optional=#true
+    }
+    record "AddOpeningInput" {
+        field "floor" type="string"
+        field "wall_id" type="string"
+        field "position" type="f64"
+        field "width" type="f64"
+        field "height" type="f64"
+        field "sill_height" type="f64" optional=#true
+        field "kind" type="string" optional=#true
+    }
+    record "PointInput" {
+        field "x" type="f64"
+        field "y" type="f64"
+    }
+    record "AddRoomInput" {
+        field "floor" type="string"
+        field "name" type="string"
+        field "boundary" type="array<PointInput>"
+        field "floor_finish" type="string" optional=#true
+        field "floor_heating" type="bool" optional=#true
+    }
+    record "EmptyInput" {
+    }
+    record "ExportDxfInput" {
+        field "path" type="string"
+        field "encoding" type="string" optional=#true
+    }
+    record "RenderAutocadInput" {
+        field "origin_x" type="f64" optional=#true
+        field "origin_y" type="f64" optional=#true
+    }
+    record "LoginInput" {
+        field "provider" type="string"
+        field "provider_user_id" type="string"
+        field "email" type="string"
+        field "name" type="string" optional=#true
+    }
+    record "SelectInput" {
+        field "id" type="string"
+    }
+    record "NameInput" {
+        field "name" type="string"
+    }
+
+    // === tool surface ===
+
+    group "building" {
+        tool "create_building" params="CreateBuildingInput" description="建物を作成"
+        tool "set_grid" params="SetGridInput" description="通り芯を設定"
+        tool "add_floor" params="AddFloorInput" description="階を追加"
+        tool "add_wall" params="AddWallInput" description="壁を追加（ID を返す）"
+        tool "add_opening" params="AddOpeningInput" description="開口部を追加"
+        tool "add_room" params="AddRoomInput" description="部屋を追加"
+    }
+    group "query" {
+        tool "get_building_summary" params="EmptyInput" description="建物の概要"
+        tool "get_building_json" params="EmptyInput" description="建物 JSON"
+    }
+    group "io" {
+        tool "export_dxf" params="ExportDxfInput" description="DXF に出力"
+        tool "render_autocad" params="RenderAutocadInput" description="AutoCAD に描画"
+    }
+    group "cloud" {
+        tool "login" params="LoginInput" description="Auth0 ログイン（ローカル専用。本番ではJWT検証が必要）"
+        tool "list_workspaces" params="EmptyInput" description="ワークスペース一覧"
+        tool "select_workspace" params="SelectInput" description="ワークスペース選択"
+        tool "create_project" params="NameInput" description="プロジェクト作成"
+        tool "list_projects" params="EmptyInput" description="プロジェクト一覧"
+        tool "save_building" params="EmptyInput" description="建物をクラウドに保存"
+        tool "load_building" params="SelectInput" description="クラウドから建物を読込"
+        tool "list_buildings" params="EmptyInput" description="建物一覧"
+    }
+}
