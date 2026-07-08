@@ -232,6 +232,44 @@ fn three_level_nesting_areas() {
 }
 
 #[test]
+fn three_level_nesting_thin_rings() {
+    // outer < 2×middle の同心3矩形（6000/5000/2000 → 36/25/4㎡）。穴帰属を「減算後の
+    // 面積」で判定すると外側が中間より小さく見えて誤帰属した回帰。
+    // hall=36-25=11、middle=25-4=21、inner=4、総和=36。
+    let mut floor = Floor::new("1F", 0.0, 3000.0);
+    let mut square = |x0: f64, y0: f64, s: f64| {
+        for (a, b) in [
+            ((x0, y0), (x0 + s, y0)),
+            ((x0 + s, y0), (x0 + s, y0 + s)),
+            ((x0 + s, y0 + s), (x0, y0 + s)),
+            ((x0, y0 + s), (x0, y0)),
+        ] {
+            floor.add_wall(Point2D::new(a.0, a.1), Point2D::new(b.0, b.1), 50.0);
+        }
+    };
+    square(0.0, 0.0, 6000.0); // 36㎡
+    square(500.0, 500.0, 5000.0); // 25㎡
+    square(2000.0, 2000.0, 2000.0); // 4㎡
+    let hall = Room::new("hall", Point2D::new(200.0, 200.0));
+    let middle = Room::new("middle", Point2D::new(700.0, 700.0));
+    let inner = Room::new("inner", Point2D::new(3000.0, 3000.0));
+    assert!(
+        (floor.room_area(&hall).unwrap() - 11.0).abs() < 0.3,
+        "hall=11"
+    );
+    assert!(
+        (floor.room_area(&middle).unwrap() - 21.0).abs() < 0.3,
+        "middle=21"
+    );
+    assert!(
+        (floor.room_area(&inner).unwrap() - 4.0).abs() < 0.2,
+        "inner=4"
+    );
+    floor.rooms.extend([hall, middle, inner]);
+    assert!((floor.area() - 36.0).abs() < 0.3, "footprint 36㎡");
+}
+
+#[test]
 fn duplicate_seed_counts_area_once() {
     // 5000×4000=20㎡ の1部屋に2シード → 面積は1回だけ計上、validate が競合を検出。
     let mut floor = Floor::new("1F", 0.0, 3000.0);

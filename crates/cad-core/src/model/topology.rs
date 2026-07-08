@@ -216,18 +216,21 @@ pub fn faces(nodes: &[Node], walls: &[Wall], tol: f64) -> Vec<Face> {
             area: c.area,
         })
         .collect();
+    // 親選択は**穴を引く前の元面積**で行う（途中で減った面積を基準にすると処理順に依存し、
+    // 3階層ネストで外側が中間より小さく見えて誤帰属する）。最終的な `-=` だけが面積を変える。
+    let orig_area: Vec<f64> = faces.iter().map(|f| f.area).collect();
     for c in cycles.iter().filter(|c| c.area < -EPS) {
         let hole_area = c.area.abs();
         let rep = interior_point(&c.polygon);
         if let Some(idx) = faces
             .iter()
             .enumerate()
-            .filter(|(_, f)| {
-                f.area > hole_area + EPS // 真に囲む親（|穴| より大きい面）だけ
+            .filter(|(i, f)| {
+                orig_area[*i] > hole_area + EPS // 真に囲む親（|穴| より大きい元面積）だけ
                     && f.polygon.len() >= 3
                     && point_in_polygon(rep, &f.polygon)
             })
-            .min_by(|a, b| a.1.area.total_cmp(&b.1.area))
+            .min_by(|a, b| orig_area[a.0].total_cmp(&orig_area[b.0]))
             .map(|(i, _)| i)
         {
             faces[idx].area -= hole_area;
@@ -239,7 +242,8 @@ pub fn faces(nodes: &[Node], walls: &[Wall], tol: f64) -> Vec<Face> {
 }
 
 /// 単純多角形の**内部が保証された1点**。頂点重心が内部ならそれを、外（凹形状）なら
-/// 重心の y を通る水平走査線で最初の内部スパンの中点を返す（穴の親判定の代表点に使う）。
+/// バウンディングボックス内の複数の水平走査線を試し、最初の内部スパンの中点を返す
+/// （穴の親判定の代表点に使う）。走査線が頂点を丁度通る退化は別の割合で回避する。
 fn interior_point(poly: &[Point2D]) -> Point2D {
     let n = poly.len();
     let c = {
@@ -251,20 +255,25 @@ fn interior_point(poly: &[Point2D]) -> Point2D {
     if n < 3 || point_in_polygon(c, poly) {
         return c;
     }
-    let y = c.y;
-    let mut xs: Vec<f64> = Vec::new();
-    for i in 0..n {
-        let (a, b) = (poly[i], poly[(i + 1) % n]);
-        if (a.y > y) != (b.y > y) {
-            xs.push(a.x + (y - a.y) / (b.y - a.y) * (b.x - a.x));
+    let (ymin, ymax) = poly.iter().fold((f64::MAX, f64::MIN), |(lo, hi), p| {
+        (lo.min(p.y), hi.max(p.y))
+    });
+    for frac in [0.5, 0.25, 0.75, 0.1, 0.9, 0.37, 0.63] {
+        let y = ymin + (ymax - ymin) * frac;
+        let mut xs: Vec<f64> = Vec::new();
+        for i in 0..n {
+            let (a, b) = (poly[i], poly[(i + 1) % n]);
+            if (a.y > y) != (b.y > y) {
+                xs.push(a.x + (y - a.y) / (b.y - a.y) * (b.x - a.x));
+            }
+        }
+        xs.sort_by(f64::total_cmp);
+        // even-odd: 内部スパンは (0,1),(2,3),... 偶数交差のときだけ採用（頂点直撃を回避）。
+        if xs.len() >= 2 && xs.len().is_multiple_of(2) {
+            return Point2D::new((xs[0] + xs[1]) / 2.0, y);
         }
     }
-    xs.sort_by(f64::total_cmp);
-    if xs.len() >= 2 {
-        Point2D::new((xs[0] + xs[1]) / 2.0, y)
-    } else {
-        c
-    }
+    c // 単純多角形なら到達しない
 }
 
 /// 点が面の内部か（外周に入り、かつどの穴にも入っていない）。
