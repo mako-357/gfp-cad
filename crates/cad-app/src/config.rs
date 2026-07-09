@@ -11,6 +11,13 @@ pub const CLEAR: wgpu::Color = wgpu::Color {
 pub const SEL: u32 = 0xFF_D2_4A_88;
 /// Tool preview (in-progress wall/room), bright cyan.
 pub const PREVIEW: u32 = 0x66_E0_FF_CC;
+/// Node handle (grabbable graph vertex, Select mode), muted steel.
+pub const NODE: u32 = 0x8A_93_A2_DD;
+/// Selected/grabbed node handle, bright amber (opaque).
+pub const NODE_SEL: u32 = 0xFF_C8_3A_FF;
+
+/// Node handle half-size in screen px (converted to world mm via camera scale).
+pub const NODE_HANDLE_PX: f64 = 4.0;
 
 /// Grid-snap radius in screen px (converted to world mm via camera scale).
 pub const SNAP_PX: f64 = 12.0;

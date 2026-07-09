@@ -143,6 +143,23 @@ impl Floor {
         id
     }
 
+    /// ノードを移動する（座標を差し替えるだけ）。そのノードを端点に持つ壁は同じ NodeId を
+    /// 参照しているので**自動的に追従**し、部屋も面の再導出で追従する。存在しない id は無視。
+    /// マージ（別ノードへの吸着・接合）はしない。
+    pub fn move_node(&mut self, id: NodeId, point: Point2D) {
+        if let Some(n) = self.nodes.iter_mut().find(|n| n.id == id) {
+            n.point = point;
+        }
+    }
+
+    /// ノード `id` を端点に持つ壁の本数（インスペクタ表示・degree 判定用）。
+    pub fn walls_at_node(&self, id: NodeId) -> usize {
+        self.walls
+            .iter()
+            .filter(|w| w.start == id || w.end == id)
+            .count()
+    }
+
     /// モデル整合を検証し、問題（dangling / orphan / 開口の親壁欠落）の一覧を返す。
     /// 空なら健全。load 後・export 前に呼び、silent なデータ欠落を検出するために使う。
     pub fn validate(&self) -> Vec<String> {

@@ -34,9 +34,47 @@ pub fn build_overlay(floor: &Floor, sel: Selection) -> Geo {
                 fill_face(&mut g, &face, config::SEL); // 穴も切り抜く（塗りと一致）
             }
         }
+        Selection::Node(id) => {
+            if let Some(n) = floor.nodes.iter().find(|n| n.id == id) {
+                // Larger accent square is drawn by `push_node_handles`; here just
+                // ensure a visible marker even if handles are off.
+                push_square(&mut g, [n.point.x, n.point.y], 60.0, config::NODE_SEL);
+            }
+        }
         Selection::None => {}
     }
     g
+}
+
+/// Grabbable node handles for Select mode: a small square per graph node,
+/// with `sel` (if a Node) drawn larger in the accent colour. `hw` is the world
+/// half-size (caller passes a screen-constant size via camera scale).
+pub fn push_node_handles(g: &mut Geo, floor: &Floor, hw: f64, sel: Selection) {
+    let selected = match sel {
+        Selection::Node(id) => Some(id),
+        _ => None,
+    };
+    for n in &floor.nodes {
+        if Some(n.id) == selected {
+            push_square(g, [n.point.x, n.point.y], hw * 1.8, config::NODE_SEL);
+        } else {
+            push_square(g, [n.point.x, n.point.y], hw, config::NODE);
+        }
+    }
+}
+
+/// A square of half-size `hw` (world mm) centred at `c`.
+fn push_square(g: &mut Geo, c: [f64; 2], hw: f64, color: u32) {
+    push_quad(
+        g,
+        [
+            [c[0] - hw, c[1] - hw],
+            [c[0] + hw, c[1] - hw],
+            [c[0] + hw, c[1] + hw],
+            [c[0] - hw, c[1] + hw],
+        ],
+        color,
+    );
 }
 
 pub fn build(building: &Building, floor_idx: usize) -> Geo {
