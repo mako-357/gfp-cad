@@ -16,8 +16,11 @@ pub fn pick_node(floor: &Floor, world: [f64; 2], tol: f64) -> Option<NodeId> {
 }
 
 /// Snap `world` to the nearest grid-axis intersection / line only (no node snap).
-/// Used while dragging a node so it never snaps onto itself or another node
-/// (coincident distinct nodes would break face derivation).
+/// Used while dragging a node: we don't *attract* to other nodes (so the drag
+/// stays predictable). Note this doesn't fully prevent coincidence — if the
+/// snapped grid point already hosts another node, two distinct nodes will share
+/// coordinates and that corner won't close (no auto-merge yet; drag stays a pure
+/// coordinate move). Merging dropped-together nodes is a planned follow-up.
 pub fn snap_to_grid(building: &Building, world: [f64; 2], tol: f64) -> [f64; 2] {
     let snap = |axes: &[cad_core::GridAxis], v: f64| -> f64 {
         axes.iter()

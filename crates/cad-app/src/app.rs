@@ -225,17 +225,34 @@ impl State {
 
     fn set_tool(&mut self, tool: Tool) {
         self.tool_state.cancel();
-        self.cancel_node_drag();
+        self.finish_node_drag(); // finalize any in-progress drag as its own undo step
         self.tool = tool;
         self.refresh_hud();
         self.rebuild_overlay();
     }
 
-    /// Abandon an in-progress node drag, discarding its pending transaction.
+    /// Finalize an in-progress node drag as one undo step (commit if it moved).
+    /// Safe to call when no drag is active. Used on release / tool-switch /
+    /// focus-loss / before history ops so the state machine never leaves a
+    /// half-applied drag with no undo entry.
+    fn finish_node_drag(&mut self) {
+        if self.drag_node.take().is_some() {
+            let moved = self.drag_moved;
+            self.document.commit_transaction(moved);
+            self.drag_moved = false;
+            if moved {
+                self.after_edit();
+            }
+        }
+    }
+
+    /// Abort an in-progress node drag, rolling the model back to the pre-drag state
+    /// (used by Escape). No undo entry — the drag is undone in place.
     fn cancel_node_drag(&mut self) {
         if self.drag_node.take().is_some() {
-            self.document.commit_transaction(false);
+            self.document.rollback_transaction();
             self.drag_moved = false;
+            self.after_edit();
         }
     }
 
@@ -288,8 +305,12 @@ impl State {
         if self.tool != Tool::Select {
             return;
         }
+        // Safety: never coalesce a new grab into a stale transaction.
+        self.finish_node_drag();
         let world = self.raw_cursor();
-        let tol = config::SNAP_PX / self.camera.scale;
+        // Grab radius tracks the visible handle size (+ a small margin) so a press
+        // outside the handle falls through to normal wall/room selection.
+        let tol = config::NODE_HANDLE_PX * 2.5 / self.camera.scale;
         if let Some(nid) = self
             .document
             .active_floor()
@@ -321,17 +342,9 @@ impl State {
         });
         self.drag_moved = true;
         self.rebuild_model_keep_selection();
+        self.rebuild_overlay(); // node handles/highlight must follow the drag (M2)
         self.refresh_inspector();
         self.needs_redraw = true;
-    }
-
-    /// On release of a node drag: commit the transaction (one undo step if it moved).
-    fn end_node_drag(&mut self, _nid: NodeId) {
-        self.document.commit_transaction(self.drag_moved);
-        if self.drag_moved {
-            self.after_edit();
-        }
-        self.drag_moved = false;
     }
 
     /// After any model mutation: refresh labels/model if revision changed, then overlay + hud.
@@ -394,20 +407,22 @@ impl State {
     }
 
     fn undo(&mut self) {
+        self.finish_node_drag(); // finalize any in-progress drag before touching history
         if self.document.undo() {
             self.reconcile_after_history();
         }
     }
 
     fn redo(&mut self) {
+        self.finish_node_drag();
         if self.document.redo() {
             self.reconcile_after_history();
         }
     }
 
     /// After undo/redo the building changed wholesale: rebuild and drop any now-stale selection.
+    /// (Any in-progress drag was already finalized by `undo`/`redo` before this runs.)
     fn reconcile_after_history(&mut self) {
-        self.cancel_node_drag();
         self.rebuild_model_keep_selection();
         self.document.selection = Selection::None;
         self.inspector = None;
@@ -619,6 +634,13 @@ impl ApplicationHandler for App {
                 state.refresh_hud();
                 state.needs_redraw = true;
             }
+            WindowEvent::Focused(false) => {
+                // Losing focus can swallow the mouse-up; finalize any drag so the
+                // node can't keep following the cursor after the button is released.
+                state.dragging = false;
+                state.finish_node_drag();
+                state.needs_redraw = true;
+            }
             WindowEvent::RedrawRequested => state.render(),
             WindowEvent::MouseInput {
                 state: btn_state,
@@ -633,8 +655,8 @@ impl ApplicationHandler for App {
                 }
                 ElementState::Released => {
                     state.dragging = false;
-                    if let Some(nid) = state.drag_node.take() {
-                        state.end_node_drag(nid);
+                    if state.drag_node.is_some() {
+                        state.finish_node_drag();
                     } else if !state.moved {
                         state.on_click();
                     }
@@ -697,7 +719,9 @@ impl ApplicationHandler for App {
                     Key::Character("o" | "O") => state.open_dialog(),
                     Key::Named(NamedKey::Enter) => state.commit_tool(),
                     Key::Named(NamedKey::Escape) => {
-                        if state.tool_state.is_active() {
+                        if state.drag_node.is_some() {
+                            state.cancel_node_drag(); // roll the drag back
+                        } else if state.tool_state.is_active() {
                             state.tool_state.cancel();
                             state.rebuild_overlay();
                         } else {

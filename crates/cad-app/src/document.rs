@@ -98,6 +98,15 @@ impl Document {
         }
     }
 
+    /// Abort a transaction: restore the model to the start snapshot and discard it.
+    /// (No history entry — the drag never happened.)
+    pub fn rollback_transaction(&mut self) {
+        if let Some(snapshot) = self.pending.take() {
+            self.building = snapshot;
+            self.revision += 1;
+        }
+    }
+
     pub fn can_undo(&self) -> bool {
         !self.undo.is_empty()
     }
