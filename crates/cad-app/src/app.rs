@@ -42,7 +42,9 @@ struct State {
     tool_state: ToolState,
     /// Transient one-line hint shown in the HUD (e.g. a missed AddRoom click).
     hint: Option<String>,
-    /// In-app onboarding guide overlay (shown on first run; toggle with H / ?).
+    /// In-app onboarding guide overlay. Shown on **every** launch for now (no
+    /// "seen" flag is persisted yet); dismiss with H / ? / Esc. Persisting a
+    /// first-run-only flag is a follow-up.
     show_help: bool,
     help_title: Option<TextBuffer>,
     help_body: Option<TextBuffer>,
@@ -87,7 +89,7 @@ impl State {
             tool: Tool::Select,
             tool_state: ToolState::default(),
             hint: None,
-            show_help: true, // 初回は手厚くガイドを出す
+            show_help: true, // 起動時に手厚くガイドを出す（毎回・H/Esc で閉じる）
             help_title: None,
             help_body: None,
             help_hint: None,
@@ -562,9 +564,16 @@ impl State {
                 custom_glyphs: &[],
             });
         }
-        // In-app guide text, positioned inside the panel drawn above.
+        // In-app guide text, positioned inside the panel drawn above. Clip to the
+        // panel rect so a small window can't spill the body onto the dim backdrop.
         if self.show_help {
             let tx = px0 + 28.0 * sc;
+            let panel_bounds = TextBounds {
+                left: px0 as i32,
+                top: py0 as i32,
+                right: (px0 + panel_w) as i32,
+                bottom: (py0 + panel_h) as i32,
+            };
             for (buf, top, color) in [
                 (
                     &self.help_title,
@@ -588,7 +597,7 @@ impl State {
                         left: tx,
                         top,
                         scale: 1.0,
-                        bounds,
+                        bounds: panel_bounds,
                         default_color: color,
                         custom_glyphs: &[],
                     });
@@ -817,10 +826,11 @@ impl ApplicationHandler for App {
                     Key::Character("2") => state.set_tool(Tool::AddRoom),
                     Key::Character("3") => state.set_tool(Tool::AddOpening),
                     Key::Character("0") => state.set_tool(Tool::Select),
-                    // View / IO.
+                    // View / IO. Suppress the document-replacing / modal-dialog
+                    // ones while the guide overlay is up (they'd act behind it).
                     Key::Character("f" | "F") => state.fit(),
-                    Key::Character("l" | "L") => state.load_sample(),
-                    Key::Character("o" | "O") => state.open_dialog(),
+                    Key::Character("l" | "L") if !state.show_help => state.load_sample(),
+                    Key::Character("o" | "O") if !state.show_help => state.open_dialog(),
                     Key::Character("h" | "H" | "?") => {
                         state.show_help = !state.show_help;
                     }

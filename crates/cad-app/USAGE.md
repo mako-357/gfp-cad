@@ -81,9 +81,10 @@ cargo run -p cad-app -- plan.json    # 既存の Building JSON を開いて起�
 | `O` | JSON を開く |
 | `L` | 組込サンプルを読み込む |
 | `F` | 全体を画面にフィット |
+| `H` / `?` | 使い方ガイドの開閉 |
 | `Ctrl+Z` / `Ctrl+Y` | 元に戻す / やり直し |
 | `Enter` | 確定 |
-| `Esc` | 取消・選択解除 |
+| `Esc` | 取消・選択解除（ガイド表示中はガイドを閉じる） |
 
 保存形式（Building JSON）は cad-mcp（LLM）・cad-db（クラウド）と同一なので、
 AI が組んだモデルを無変換で開けます。
