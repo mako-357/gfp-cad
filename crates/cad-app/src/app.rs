@@ -240,6 +240,7 @@ impl State {
             let moved = self.drag_moved;
             self.document.commit_transaction(moved);
             self.drag_moved = false;
+            self.clear_press_state();
             if moved {
                 self.after_edit();
             }
@@ -252,8 +253,17 @@ impl State {
         if self.drag_node.take().is_some() {
             self.document.rollback_transaction();
             self.drag_moved = false;
+            self.clear_press_state();
             self.after_edit();
         }
+    }
+
+    /// Clear left-button press state after a drag ends out-of-band (undo/redo,
+    /// tool-switch, focus-loss). Prevents a still-held button from panning
+    /// (`dragging`) and a late `Released` from firing `on_click` (`moved`).
+    fn clear_press_state(&mut self) {
+        self.dragging = false;
+        self.moved = true;
     }
 
     /// World-mm cursor without snapping (used for selection hit-testing).
