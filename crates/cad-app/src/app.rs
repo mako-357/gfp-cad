@@ -38,6 +38,8 @@ struct State {
     hud: Option<TextBuffer>,
     tool: Tool,
     tool_state: ToolState,
+    /// Transient one-line hint shown in the HUD (e.g. a missed AddRoom click).
+    hint: Option<String>,
     /// DPI scale (physical px per logical px). Text sizes/positions are physical
     /// px, so font sizes and screen-space chrome must be multiplied by this.
     ui_scale: f32,
@@ -73,6 +75,7 @@ impl State {
             hud: None,
             tool: Tool::Select,
             tool_state: ToolState::default(),
+            hint: None,
             ui_scale,
             last_revision: 0,
             cursor: [0.0, 0.0],
@@ -142,8 +145,12 @@ impl State {
         } else {
             "・"
         };
+        let hint = match &self.hint {
+            Some(h) => format!("   ⚠ {h}"),
+            None => String::new(),
+        };
         let text = format!(
-            "[{}]{}  {undo}{redo}   1:壁 2:部屋 3:開口 0:選択  ↵確定 Esc取消 Ctrl+Z/Y Ctrl+S保存",
+            "[{}]{}  {undo}{redo}   1:壁 2:部屋 3:開口 0:選択  ↵確定 Esc取消 Ctrl+Z/Y Ctrl+S保存{hint}",
             self.tool.label(),
             dirty,
         );
@@ -180,9 +187,6 @@ impl State {
             Preview::None => {}
             Preview::Segment(a, b) => {
                 scene::geometry::push_polyline(&mut geo, &[a, b], hw, config::PREVIEW);
-            }
-            Preview::Polyline(pts) => {
-                scene::geometry::push_polyline(&mut geo, &pts, hw, config::PREVIEW);
             }
         }
         self.renderer
@@ -233,8 +237,15 @@ impl State {
             self.select(sel);
         } else {
             let p = self.snapped_cursor();
-            if let Some(sel) = self.tool_state.on_click(self.tool, &mut self.document, p) {
-                self.document.selection = sel;
+            match self.tool_state.on_click(self.tool, &mut self.document, p) {
+                Some(sel) => {
+                    self.document.selection = sel;
+                    self.hint = None;
+                }
+                None if self.tool == Tool::AddRoom => {
+                    self.hint = Some("囲まれた領域内をクリックしてください".into());
+                }
+                None => {}
             }
             self.after_edit();
         }
@@ -461,11 +472,20 @@ fn inspector_text(floor: &cad_core::Floor, sel: Selection) -> Option<String> {
         }
         Selection::Room(id) => {
             let r = floor.rooms.iter().find(|r| r.id == id)?;
+            // 面を1回だけ解決して面積・周長を両方求める（faces() の重複計算を避ける）。
+            let (area, perim) = match floor.face_at(r.seed) {
+                Some(f) => {
+                    let n = f.polygon.len();
+                    let perim: f64 = (0..n)
+                        .map(|i| f.polygon[i].distance_to(&f.polygon[(i + 1) % n]))
+                        .sum();
+                    (f.area / 1_000_000.0, perim)
+                }
+                None => (0.0, 0.0),
+            };
             Some(format!(
-                "部屋\n名前: {}\n面積: {:.2} ㎡\n周長: {:.0} mm",
+                "部屋\n名前: {}\n面積: {area:.2} ㎡\n周長: {perim:.0} mm",
                 r.name,
-                r.area(),
-                r.perimeter(),
             ))
         }
     }

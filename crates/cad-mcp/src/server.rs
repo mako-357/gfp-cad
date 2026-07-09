@@ -197,13 +197,16 @@ impl GfpCadMcpServer {
         let Some(floor) = b.floors.iter_mut().find(|f| f.name == i.floor) else {
             return format!("Error: Floor '{}' not found", i.floor);
         };
-        let boundary: Vec<Point2D> = i.boundary.iter().map(|p| Point2D::new(p.x, p.y)).collect();
-        let mut room = Room::new(&i.name, boundary);
+        // 部屋はシード点で定義（境界は壁グラフの面から導出）。
+        let mut room = Room::new(&i.name, Point2D::new(i.seed_x, i.seed_y));
         room.floor_finish = i.floor_finish;
         room.has_floor_heating = i.floor_heating.unwrap_or(false);
-        let area = room.area();
+        let area = floor.room_area(&room);
         floor.rooms.push(room);
-        format!("{} ({area:.1} sqm)", i.name)
+        match area {
+            Some(a) => format!("{} ({a:.1} sqm)", i.name),
+            None => format!("{} (警告: シードを含む閉領域が無い＝未囲い)", i.name),
+        }
     }
 
     #[tool(name = "get_building_summary", description = "建物の概要")]
@@ -221,8 +224,13 @@ impl GfpCadMcpServer {
                 floor.openings.len(),
                 floor.rooms.len()
             );
-            for room in &floor.rooms {
-                out += &format!("  {} — {:.1}sqm\n", room.name, room.area());
+            for (room, face) in floor.rooms_faces() {
+                match face {
+                    Some(f) => {
+                        out += &format!("  {} — {:.1}sqm\n", room.name, f.area / 1_000_000.0)
+                    }
+                    None => out += &format!("  {} — 未囲い\n", room.name),
+                }
             }
         }
         out += &format!("延べ面積: {:.1}sqm", b.total_floor_area());

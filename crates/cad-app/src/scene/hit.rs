@@ -1,6 +1,6 @@
 //! World-space hit-testing. Priority: openings > walls > rooms.
 
-use cad_core::{Building, Floor, Opening};
+use cad_core::{Building, Floor, Opening, Point2D};
 
 use crate::document::Selection;
 
@@ -59,10 +59,20 @@ pub fn pick(floor: &Floor, world: [f64; 2], tol: f64) -> Selection {
             return Selection::Wall(w.id);
         }
     }
-    for r in &floor.rooms {
-        if point_in_polygon(world, &r.boundary) {
-            return Selection::Room(r.id);
+    // 面は1回だけ導出。クリックを含む**最小**面の部屋を選ぶ（穴の内側の部屋が外側に勝つ）。
+    // 穴の内部はその面に含めない（塗り・面積と一致、判定は cad_core と共有）。
+    let wp = Point2D::new(world[0], world[1]);
+    let mut best: Option<(Selection, f64)> = None;
+    for (r, face) in floor.rooms_faces() {
+        if let Some(f) = face
+            && cad_core::topology::face_contains(&f, wp)
+            && best.as_ref().is_none_or(|(_, a)| f.area < *a)
+        {
+            best = Some((Selection::Room(r.id), f.area));
         }
+    }
+    if let Some((sel, _)) = best {
+        return sel;
     }
     Selection::None
 }
@@ -105,23 +115,6 @@ fn dist_to_segment(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> (f64, f64) {
     let tc = t.clamp(0.0, 1.0);
     let proj = [a[0] + abx * tc, a[1] + aby * tc];
     (hypot(p[0] - proj[0], p[1] - proj[1]), t)
-}
-
-fn point_in_polygon(p: [f64; 2], poly: &[cad_core::Point2D]) -> bool {
-    if poly.len() < 3 {
-        return false;
-    }
-    let mut inside = false;
-    let mut j = poly.len() - 1;
-    for i in 0..poly.len() {
-        let (xi, yi) = (poly[i].x, poly[i].y);
-        let (xj, yj) = (poly[j].x, poly[j].y);
-        if (yi > p[1]) != (yj > p[1]) && p[0] < (xj - xi) * (p[1] - yi) / (yj - yi) + xi {
-            inside = !inside;
-        }
-        j = i;
-    }
-    inside
 }
 
 fn hypot(x: f64, y: f64) -> f64 {

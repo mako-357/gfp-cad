@@ -269,16 +269,12 @@ impl AcadRenderer {
             }
         }
 
-        // 部屋名ラベル
+        // 部屋名ラベル（シード点に配置、面積は導出）
         for room in &floor.rooms {
-            if room.boundary.len() < 3 {
-                continue;
-            }
-            // 重心
-            let cx: f64 =
-                room.boundary.iter().map(|p| p.x).sum::<f64>() / room.boundary.len() as f64;
-            let cy: f64 =
-                room.boundary.iter().map(|p| p.y).sum::<f64>() / room.boundary.len() as f64;
+            let Some(area) = floor.room_area(room) else {
+                continue; // 未囲いはスキップ
+            };
+            let (cx, cy) = (room.seed.x, room.seed.y);
 
             bridge::send(
                 "draw_text",
@@ -291,7 +287,7 @@ impl AcadRenderer {
                 "draw_text",
                 json!({
                     "x": ox + cx - 300.0, "y": oy + cy - 200.0,
-                    "text": format!("{:.1}sqm", room.area()), "height": 100.0, "layer": "GFP_ROOM"
+                    "text": format!("{area:.1}sqm"), "height": 100.0, "layer": "GFP_ROOM"
                 }),
             )?;
             report.rooms += 1;

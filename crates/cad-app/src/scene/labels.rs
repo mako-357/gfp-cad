@@ -47,15 +47,14 @@ pub fn build(building: &Building, floor_idx: usize) -> Vec<LabelSpec> {
         });
     }
 
-    // Room name (SemiBold) + area (Regular) near the polygon centroid.
+    // Room name (SemiBold) + derived area (Regular) at the room seed. 未囲いはスキップ。
+    // 面は1回だけ導出（room 毎に再構築しない）。
     if let Some(floor) = building.floors.get(floor_idx) {
-        for room in &floor.rooms {
-            if room.boundary.len() < 3 {
+        for (room, face) in floor.rooms_faces() {
+            let Some(area) = face.map(|f| f.area / 1_000_000.0) else {
                 continue;
-            }
-            let n = room.boundary.len() as f64;
-            let cx = room.boundary.iter().map(|p| p.x).sum::<f64>() / n;
-            let cy = room.boundary.iter().map(|p| p.y).sum::<f64>() / n;
+            };
+            let (cx, cy) = (room.seed.x, room.seed.y);
             out.push(LabelSpec {
                 world: [cx, cy + 300.0],
                 text: room.name.clone(),
@@ -65,7 +64,7 @@ pub fn build(building: &Building, floor_idx: usize) -> Vec<LabelSpec> {
             });
             out.push(LabelSpec {
                 world: [cx, cy - 350.0],
-                text: format!("{:.1}㎡", room.area()),
+                text: format!("{area:.1}㎡"),
                 size_px: 13.0,
                 weight: 400, // Regular
                 color: config::LABEL_GRID,

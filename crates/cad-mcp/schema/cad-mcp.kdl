@@ -64,14 +64,11 @@ schema "cad" version="1.0.0" {
         field "sill_height" type="f64" optional=#true
         field "kind" type="string" optional=#true
     }
-    record "PointInput" {
-        field "x" type="f64"
-        field "y" type="f64"
-    }
     record "AddRoomInput" {
         field "floor" type="string"
         field "name" type="string"
-        field "boundary" type="array<PointInput>"
+        field "seed_x" type="f64"
+        field "seed_y" type="f64"
         field "floor_finish" type="string" optional=#true
         field "floor_heating" type="bool" optional=#true
     }

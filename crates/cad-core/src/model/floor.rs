@@ -51,9 +51,64 @@ impl Floor {
         }
     }
 
-    /// 床面積の合計 (sqm)
+    /// 床面積の合計 (sqm) — 各部屋の導出面積の総和。**同一面に複数シードが落ちても
+    /// 面は1回だけ計上**（仕切り削除後の二重計上を防ぐ）。
     pub fn area(&self) -> f64 {
-        self.rooms.iter().map(|r| r.area()).sum()
+        use std::collections::HashSet;
+        let faces = self.faces();
+        let mut seen: HashSet<Vec<NodeId>> = HashSet::new();
+        let mut total = 0.0;
+        for r in &self.rooms {
+            if let Some(f) = resolve_seed(&faces, r.seed)
+                && seen.insert(face_key(&f))
+            {
+                total += f.area / 1_000_000.0;
+            }
+        }
+        total
+    }
+
+    // === 面（部屋）の導出 ===
+
+    /// 壁グラフの有界面（部屋候補、穴を差し引いた正味面積）を導出する。
+    pub fn faces(&self) -> Vec<crate::Face> {
+        crate::topology::faces(&self.nodes, &self.walls, NODE_MERGE_TOL)
+    }
+
+    /// 点を含む最小の有界面（入れ子時は内側）。
+    pub fn face_at(&self, p: Point2D) -> Option<crate::Face> {
+        resolve_seed(&self.faces(), p)
+    }
+
+    /// 全部屋を **1回の面導出**で解決する（room ごとに faces() を再構築しない）。
+    /// 描画・ラベル・面積の hot path はこれを使う。
+    pub fn rooms_faces(&self) -> Vec<(&Room, Option<crate::Face>)> {
+        let faces = self.faces();
+        self.rooms
+            .iter()
+            .map(|r| (r, resolve_seed(&faces, r.seed)))
+            .collect()
+    }
+
+    /// 部屋の境界ポリゴン（シードを含む面の外周）。未囲いなら `None`。
+    pub fn room_boundary(&self, room: &Room) -> Option<Vec<Point2D>> {
+        self.face_at(room.seed).map(|f| f.polygon)
+    }
+
+    /// 部屋の床面積 (sqm)。穴を差し引いた正味。
+    pub fn room_area(&self, room: &Room) -> Option<f64> {
+        self.face_at(room.seed).map(|f| f.area / 1_000_000.0)
+    }
+
+    /// 部屋の周長 (mm、外周）。面を1回だけ解決する。
+    pub fn room_perimeter(&self, room: &Room) -> Option<f64> {
+        let poly = self.face_at(room.seed)?.polygon;
+        let n = poly.len();
+        Some(
+            (0..n)
+                .map(|i| poly[i].distance_to(&poly[(i + 1) % n]))
+                .sum(),
+        )
     }
 
     // === ノードグラフ ===
@@ -123,6 +178,83 @@ impl Floor {
                 ));
             }
         }
+
+        // 未囲い部屋 + 同一面への複数シード。
+        let faces = self.faces();
+        let mut claims: std::collections::HashMap<Vec<NodeId>, Vec<String>> = Default::default();
+        for r in &self.rooms {
+            match resolve_seed(&faces, r.seed) {
+                None => issues.push(format!(
+                    "floor {:?}: 部屋 {:?} のシードが閉領域に無い (未囲い)",
+                    self.name, r.name
+                )),
+                Some(f) => claims.entry(face_key(&f)).or_default().push(r.name.clone()),
+            }
+        }
+        for names in claims.values().filter(|v| v.len() > 1) {
+            issues.push(format!(
+                "floor {:?}: 同一の面に複数の部屋シード {names:?}（面積が二重計上される）",
+                self.name
+            ));
+        }
+
+        // ノード無しで内部交差する壁対。
+        for i in 0..self.walls.len() {
+            for j in (i + 1)..self.walls.len() {
+                let (w1, w2) = (&self.walls[i], &self.walls[j]);
+                if w1.start == w2.start
+                    || w1.start == w2.end
+                    || w1.end == w2.start
+                    || w1.end == w2.end
+                {
+                    continue;
+                }
+                if let (Some((a1, a2)), Some((b1, b2))) =
+                    (self.wall_endpoints(w1), self.wall_endpoints(w2))
+                    && crate::topology::segments_cross(a1, a2, b1, b2)
+                {
+                    issues.push(format!(
+                        "floor {:?}: 壁 {} と {} がノード無しで交差（面が壊れる）",
+                        self.name, w1.id, w2.id
+                    ));
+                }
+            }
+        }
+
+        // 接合し損ね: **宙ぶらり(degree 1)** の端点が別壁スパンに許容超〜10倍で近接
+        // （planarize で繋がらない失敗 T字）。共有コーナー（意図的な二重壁・空洞壁の端）は
+        // degree≥2 なので誤検出しない。
+        let degree = |id: NodeId| -> usize {
+            self.walls
+                .iter()
+                .filter(|w| w.start == id || w.end == id)
+                .count()
+        };
+        for w in &self.walls {
+            for ep in [w.start, w.end] {
+                if degree(ep) != 1 {
+                    continue; // 宙ぶらりの端だけを対象に
+                }
+                let Some(p) = self.node_point(ep) else {
+                    continue;
+                };
+                for other in &self.walls {
+                    if other.id == w.id || other.start == ep || other.end == ep {
+                        continue;
+                    }
+                    if let Some((a, b)) = self.wall_endpoints(other)
+                        && !crate::topology::point_near_segment(p, a, b, NODE_MERGE_TOL)
+                        && crate::topology::point_near_segment(p, a, b, NODE_MERGE_TOL * 10.0)
+                    {
+                        issues.push(format!(
+                            "floor {:?}: 壁 {} の端点が壁 {} のスパンに近接だが未接合（許容外）",
+                            self.name, w.id, other.id
+                        ));
+                    }
+                }
+            }
+        }
+
         issues
     }
 
@@ -163,4 +295,22 @@ impl Floor {
             .find(|w| w.id == id)
             .expect("just added")
     }
+}
+
+/// 面の一意キー = ソート済みノード集合。隣接面はノードを共有するので単一ノードでは
+/// 一意にならない（共有された最小ノードで別々の面が衝突し面積を取りこぼす）。
+fn face_key(f: &crate::Face) -> Vec<NodeId> {
+    let mut k = f.nodes.clone();
+    k.sort();
+    k
+}
+
+/// 点を含む最小の有界面を（事前計算済みの faces から）選ぶ。入れ子時は内側を採る。
+/// 穴の内部は「含まない」（穴には別の面が張られているか、無ければ未囲い扱い）。
+fn resolve_seed(faces: &[crate::Face], seed: Point2D) -> Option<crate::Face> {
+    faces
+        .iter()
+        .filter(|f| crate::topology::face_contains(f, seed))
+        .min_by(|a, b| a.area.total_cmp(&b.area))
+        .cloned()
 }

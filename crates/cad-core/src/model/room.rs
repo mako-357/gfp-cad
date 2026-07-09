@@ -3,20 +3,24 @@ use uuid::Uuid;
 
 use crate::Point2D;
 
-/// 部屋
+/// 部屋。
+///
+/// 境界は**持たない** —— `seed`（部屋内部の1点）を壁グラフの面に紐づけ、境界・面積は
+/// `Floor::room_boundary` / `Floor::room_area` で**導出**する（Revit の Room 相当）。
+/// これにより壁を動かすと部屋も追従し、壁と部屋が desync しない。
+///
+/// **破壊的変更**: 旧 `boundary: Vec<Point2D>` を廃し `seed: Point2D` にした（`#[serde(default)]`
+/// を付けないので、`seed` を欠く旧 JSON は**明示的にロード失敗**する＝silent な誤読は起きない）。
+/// スキーマのバージョニング/移行は未実装。旧データを読む必要が出たら `Building` にスキーマ版数を
+/// 導入して移行シムを噛ませること。なお ba6c9a6 の Wall(Point2D→NodeId) 変更で旧データは既に
+/// 非互換になっているため、実運用上この破壊は追加の後退を生まない。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Room {
     pub id: Uuid,
     /// 室名
     pub name: String,
-    /// 部屋の輪郭（閉じたポリゴン、反時計回り）(mm)。
-    ///
-    /// 注意: 壁と違い、この境界は**独立した座標**でノードグラフに参加していない。将来
-    /// 共有ノードを動かす編集を入れると壁は追従するが部屋境界は取り残される（既知の非対称・
-    /// 負債）。ノード移動編集を導入する際に boundary もノード参照化するか同期を検討する。
-    pub boundary: Vec<Point2D>,
-    /// 壁 ID の一覧（この部屋を囲む壁）
-    pub wall_ids: Vec<Uuid>,
+    /// 部屋内部の1点 (mm)。この点を含む壁グラフの面が部屋の領域になる。
+    pub seed: Point2D,
     /// 天井高 (mm) — None の場合は階の天井高に従う
     pub ceiling_height: Option<f64>,
     /// 床仕上げ
@@ -30,40 +34,17 @@ pub struct Room {
 }
 
 impl Room {
-    pub fn new(name: impl Into<String>, boundary: Vec<Point2D>) -> Self {
+    /// 内部の1点（シード）を指定して部屋を作る。境界・面積は `Floor` 経由で導出する。
+    pub fn new(name: impl Into<String>, seed: Point2D) -> Self {
         Self {
             id: Uuid::now_v7(),
             name: name.into(),
-            boundary,
-            wall_ids: Vec::new(),
+            seed,
             ceiling_height: None,
             floor_finish: None,
             wall_finish: None,
             ceiling_finish: None,
             has_floor_heating: false,
         }
-    }
-
-    /// 床面積 (sqm) — Shoelace formula
-    pub fn area(&self) -> f64 {
-        let n = self.boundary.len();
-        if n < 3 {
-            return 0.0;
-        }
-        let mut sum = 0.0;
-        for i in 0..n {
-            let j = (i + 1) % n;
-            sum += self.boundary[i].x * self.boundary[j].y;
-            sum -= self.boundary[j].x * self.boundary[i].y;
-        }
-        (sum.abs() / 2.0) / 1_000_000.0 // mm² → sqm
-    }
-
-    /// 周長 (mm)
-    pub fn perimeter(&self) -> f64 {
-        let n = self.boundary.len();
-        (0..n)
-            .map(|i| self.boundary[i].distance_to(&self.boundary[(i + 1) % n]))
-            .sum()
     }
 }

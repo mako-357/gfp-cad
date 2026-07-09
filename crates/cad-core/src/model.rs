@@ -4,6 +4,7 @@ pub mod grid;
 pub mod node;
 pub mod opening;
 pub mod room;
+pub mod topology;
 pub mod wall;
 
 pub use building::Building;
@@ -12,4 +13,5 @@ pub use grid::{GridAxis, GridSystem};
 pub use node::{Node, NodeId};
 pub use opening::{Opening, OpeningKind};
 pub use room::Room;
+pub use topology::Face;
 pub use wall::{Wall, WallMaterial, face_quad};

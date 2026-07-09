@@ -113,7 +113,7 @@ mod tests {
             let f = &mut b.floors[0];
             f.rooms.push(cad_core::Room::new(
                 "Test",
-                vec![cad_core::Point2D::new(0.0, 0.0)],
+                cad_core::Point2D::new(0.0, 0.0),
             ));
         });
         assert_eq!(doc.building.floors[0].rooms.len(), n0 + 1);

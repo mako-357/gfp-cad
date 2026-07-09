@@ -202,22 +202,19 @@ impl DxfExporter {
                 }
             }
 
-            // 部屋名
+            // 部屋名（シード点に配置、面積は導出）
             for room in &floor.rooms {
-                if room.boundary.len() < 3 {
-                    continue;
-                }
-                let cx: f64 =
-                    room.boundary.iter().map(|p| p.x).sum::<f64>() / room.boundary.len() as f64;
-                let cy: f64 =
-                    room.boundary.iter().map(|p| p.y).sum::<f64>() / room.boundary.len() as f64;
+                let Some(area) = floor.room_area(room) else {
+                    continue; // 未囲いはスキップ
+                };
+                let (cx, cy) = (room.seed.x, room.seed.y);
 
                 dxf.text(cx - 500.0, cy + 100.0, 150.0, &room.name, "GFP_ROOM")?;
                 dxf.text(
                     cx - 300.0,
                     cy - 200.0,
                     100.0,
-                    &format!("{:.1}sqm", room.area()),
+                    &format!("{area:.1}sqm"),
                     "GFP_ROOM",
                 )?;
                 report.entities += 2;

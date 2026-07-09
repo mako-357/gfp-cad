@@ -127,66 +127,31 @@ fn main() {
 
     // --- 部屋 ---
     // リビング (B-A × F-G)
-    let mut living = Room::new(
-        "リビング",
-        vec![
-            Point2D::new(6523.0, 0.0),
-            Point2D::new(12857.0, 0.0),
-            Point2D::new(12857.0, 2875.0),
-            Point2D::new(6523.0, 2875.0),
-        ],
-    );
+    // 重心: (6523,0),(12857,0),(12857,2875),(6523,2875) の平均 = (9690, 1437.5)
+    let mut living = Room::new("リビング", Point2D::new(9690.0, 1437.5));
     living.has_floor_heating = true;
     living.floor_finish = Some("無垢フローリング".into());
     living.wall_finish = Some("PB+VP".into());
 
     // ダイニング・キッチン (C-B × F-G)
-    let mut dk = Room::new(
-        "ダイニング・キッチン",
-        vec![
-            Point2D::new(0.0, 0.0),
-            Point2D::new(6523.0, 0.0),
-            Point2D::new(6523.0, 2875.0),
-            Point2D::new(0.0, 2875.0),
-        ],
-    );
+    // 重心: (0,0),(6523,0),(6523,2875),(0,2875) の平均 = (3261.5, 1437.5)
+    let mut dk = Room::new("ダイニング・キッチン", Point2D::new(3261.5, 1437.5));
     dk.has_floor_heating = true;
     dk.floor_finish = Some("無垢フローリング".into());
 
     // メインルーム (C-A × E-F) — fireplace あり
-    let mut main_room = Room::new(
-        "メインルーム",
-        vec![
-            Point2D::new(0.0, 2875.0),
-            Point2D::new(12857.0, 2875.0),
-            Point2D::new(12857.0, 8957.0),
-            Point2D::new(0.0, 8957.0),
-        ],
-    );
+    // 重心: (0,2875),(12857,2875),(12857,8957),(0,8957) の平均 = (6428.5, 5916)
+    let mut main_room = Room::new("メインルーム", Point2D::new(6428.5, 5916.0));
     main_room.has_floor_heating = true;
     main_room.floor_finish = Some("無垢フローリング".into());
 
     // ユーティリティ (C-B × D-E)
-    let utility = Room::new(
-        "ユーティリティ",
-        vec![
-            Point2D::new(0.0, 8957.0),
-            Point2D::new(6523.0, 8957.0),
-            Point2D::new(6523.0, 10680.0),
-            Point2D::new(0.0, 10680.0),
-        ],
-    );
+    // 重心: (0,8957),(6523,8957),(6523,10680),(0,10680) の平均 = (3261.5, 9818.5)
+    let utility = Room::new("ユーティリティ", Point2D::new(3261.5, 9818.5));
 
     // 寝室 (B-A × D-E)
-    let mut bedroom = Room::new(
-        "寝室",
-        vec![
-            Point2D::new(6523.0, 8957.0),
-            Point2D::new(12857.0, 8957.0),
-            Point2D::new(12857.0, 10680.0),
-            Point2D::new(6523.0, 10680.0),
-        ],
-    );
+    // 重心: (6523,8957),(12857,8957),(12857,10680),(6523,10680) の平均 = (9690, 9818.5)
+    let mut bedroom = Room::new("寝室", Point2D::new(9690.0, 9818.5));
     bedroom.floor_finish = Some("無垢フローリング".into());
 
     f1.rooms = vec![living, dk, main_room, utility, bedroom];
@@ -243,7 +208,12 @@ fn main() {
             } else {
                 ""
             };
-            println!("    {} — {:.1}sqm{}", room.name, room.area(), heating);
+            println!(
+                "    {} — {:.1}sqm{}",
+                room.name,
+                floor.room_area(room).unwrap_or(0.0),
+                heating
+            );
         }
 
         println!("\n  床面積合計: {:.1}sqm", floor.area());
