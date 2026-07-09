@@ -287,6 +287,18 @@ fn push_line(g: &mut Geo, a: [f64; 2], b: [f64; 2], hw: f64, color: u32) {
     );
 }
 
+/// Screen-space axis-aligned rectangle `[x0, y0, x1, y1]` (physical px) as two
+/// triangles, for the UI layer (help panel, dim backdrop).
+pub fn push_rect(g: &mut Geo, rect: [f32; 4], color: u32) {
+    let base = g.vertices.len() as u32;
+    let [x0, y0, x1, y1] = rect;
+    for pos in [[x0, y0], [x1, y0], [x1, y1], [x0, y1]] {
+        g.vertices.push(Vertex { pos, color });
+    }
+    g.indices
+        .extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
+}
+
 /// Push a convex quad (CCW or CW) as two triangles.
 fn push_quad(g: &mut Geo, corners: [[f64; 2]; 4], color: u32) {
     let base = g.vertices.len() as u32;
