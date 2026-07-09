@@ -297,6 +297,38 @@ fn duplicate_seed_counts_area_once() {
 }
 
 #[test]
+fn move_node_walls_and_room_follow() {
+    // 5000×4000 の矩形。右上ノードを動かすと、それを共有する2壁が追従し、部屋面積が変わる。
+    let mut floor = Floor::new("1F", 0.0, 3000.0);
+    floor.add_wall(Point2D::new(0.0, 0.0), Point2D::new(5000.0, 0.0), 100.0);
+    let ne = floor.add_node(Point2D::new(5000.0, 0.0)); // 既存端点に解決（共有）
+    floor.add_wall(
+        Point2D::new(5000.0, 0.0),
+        Point2D::new(5000.0, 4000.0),
+        100.0,
+    );
+    floor.add_wall(
+        Point2D::new(5000.0, 4000.0),
+        Point2D::new(0.0, 4000.0),
+        100.0,
+    );
+    floor.add_wall(Point2D::new(0.0, 4000.0), Point2D::new(0.0, 0.0), 100.0);
+    let room = Room::new("R", Point2D::new(1000.0, 1000.0));
+    assert!(
+        (floor.room_area(&room).unwrap() - 20.0).abs() < 0.1,
+        "初期 20㎡"
+    );
+
+    // 右下ノード (5000,0) を (7000,0) へ移動 → 底辺が伸びて面積増、2壁が追従。
+    assert_eq!(floor.walls_at_node(ne), 2, "角ノードは2壁が共有");
+    floor.move_node(ne, Point2D::new(7000.0, 0.0));
+    // 台形: 上辺5000・下辺7000相当ではなく、矩形の1角を動かした四角形。
+    // 面積は shoelace で導出（およそ 24㎡ 前後）。負にならず 20 より大きいことを確認。
+    let a = floor.room_area(&room).unwrap();
+    assert!(a > 20.0, "角を外へ動かしたので面積増: {a}");
+}
+
+#[test]
 fn test_validate_detects_dangling_and_orphan() {
     let mut floor = Floor::new("1F", 0.0, 3000.0);
     floor.add_wall(Point2D::new(0.0, 0.0), Point2D::new(1000.0, 0.0), 100.0);

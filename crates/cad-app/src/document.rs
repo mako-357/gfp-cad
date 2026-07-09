@@ -16,6 +16,7 @@ pub enum Selection {
     Wall(Uuid),
     Opening(Uuid),
     Room(Uuid),
+    Node(Uuid),
 }
 
 pub struct Document {
@@ -28,6 +29,9 @@ pub struct Document {
     pub revision: u64,
     undo: Vec<Building>,
     redo: Vec<Building>,
+    /// Snapshot captured at the start of a coalesced edit (a drag): committed as
+    /// one undo step when the transaction ends.
+    pending: Option<Building>,
 }
 
 impl Document {
@@ -41,6 +45,7 @@ impl Document {
             revision: 1,
             undo: Vec::new(),
             redo: Vec::new(),
+            pending: None,
         }
     }
 
@@ -61,6 +66,36 @@ impl Document {
         self.dirty = true;
         self.revision += 1;
         result
+    }
+
+    /// Begin a coalesced edit (e.g. a drag): snapshot once, mutate many times via
+    /// `mutate`, then `commit_transaction` once → a single undo step.
+    pub fn begin_transaction(&mut self) {
+        if self.pending.is_none() {
+            self.pending = Some(self.building.clone());
+        }
+    }
+
+    /// Mutate mid-transaction: bumps dirty/revision but takes no new snapshot.
+    pub fn mutate(&mut self, f: impl FnOnce(&mut Building)) {
+        f(&mut self.building);
+        self.dirty = true;
+        self.revision += 1;
+    }
+
+    /// End a transaction. If `changed`, push the start snapshot as one undo step;
+    /// otherwise discard it (no-op drag leaves history untouched).
+    pub fn commit_transaction(&mut self, changed: bool) {
+        let Some(snapshot) = self.pending.take() else {
+            return;
+        };
+        if changed {
+            self.undo.push(snapshot);
+            if self.undo.len() > HISTORY_LIMIT {
+                self.undo.remove(0);
+            }
+            self.redo.clear();
+        }
     }
 
     pub fn can_undo(&self) -> bool {

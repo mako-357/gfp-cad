@@ -10,6 +10,8 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{Key, NamedKey};
 use winit::window::{Window, WindowId};
 
+use cad_core::{NodeId, Point2D};
+
 use crate::camera::Camera;
 use crate::document::{Document, Selection};
 use crate::gpu::{Gpu, Renderer, Text};
@@ -48,6 +50,10 @@ struct State {
     press_cursor: [f64; 2],
     dragging: bool,
     moved: bool,
+    /// The node currently being dragged (Select mode grab), if any.
+    drag_node: Option<NodeId>,
+    /// Whether the current node drag actually moved the node (→ one undo step).
+    drag_moved: bool,
     ctrl: bool,
     /// Set when something changed; drives on-demand redraw (idle = no repaint).
     needs_redraw: bool,
@@ -82,6 +88,8 @@ impl State {
             press_cursor: [0.0, 0.0],
             dragging: false,
             moved: false,
+            drag_node: None,
+            drag_moved: false,
             ctrl: false,
             needs_redraw: true,
             awaiting_first_resize: true,
@@ -181,6 +189,13 @@ impl State {
             Some(floor) => scene::geometry::build_overlay(floor, self.document.selection),
             None => VertexBuffers::new(),
         };
+        // Node handles (grabbable graph vertices) in Select mode, screen-constant size.
+        if self.tool == Tool::Select
+            && let Some(floor) = self.document.active_floor()
+        {
+            let hw = config::NODE_HANDLE_PX / self.camera.scale;
+            scene::geometry::push_node_handles(&mut geo, floor, hw, self.document.selection);
+        }
         // Tool preview follows the (snapped) cursor.
         let hw = config::GRID_HALF_W.max(2.0 / self.camera.scale);
         match self.tool_state.preview(self.tool, self.snapped_cursor()) {
@@ -210,9 +225,18 @@ impl State {
 
     fn set_tool(&mut self, tool: Tool) {
         self.tool_state.cancel();
+        self.cancel_node_drag();
         self.tool = tool;
         self.refresh_hud();
         self.rebuild_overlay();
+    }
+
+    /// Abandon an in-progress node drag, discarding its pending transaction.
+    fn cancel_node_drag(&mut self) {
+        if self.drag_node.take().is_some() {
+            self.document.commit_transaction(false);
+            self.drag_moved = false;
+        }
     }
 
     /// World-mm cursor without snapping (used for selection hit-testing).
@@ -256,6 +280,58 @@ impl State {
             self.document.selection = sel;
         }
         self.after_edit();
+    }
+
+    /// On press in Select mode: if a node is under the cursor, grab it for dragging
+    /// (open a coalesced transaction so the whole drag is one undo step).
+    fn try_grab_node(&mut self) {
+        if self.tool != Tool::Select {
+            return;
+        }
+        let world = self.raw_cursor();
+        let tol = config::SNAP_PX / self.camera.scale;
+        if let Some(nid) = self
+            .document
+            .active_floor()
+            .and_then(|f| hit::pick_node(f, world, tol))
+        {
+            self.drag_node = Some(nid);
+            self.drag_moved = false;
+            self.document.begin_transaction();
+            self.select(Selection::Node(nid));
+            self.needs_redraw = true;
+        }
+    }
+
+    /// While dragging: move the grabbed node to the grid-snapped cursor; the walls
+    /// referencing it and the derived rooms follow automatically.
+    fn drag_selected_node(&mut self) {
+        let Some(nid) = self.drag_node else { return };
+        let (w, h) = self.viewport();
+        let world = self
+            .camera
+            .screen_to_world(self.cursor[0], self.cursor[1], w, h);
+        let tol = config::SNAP_PX / self.camera.scale;
+        let p = hit::snap_to_grid(&self.document.building, world, tol);
+        let floor_idx = self.document.active_floor;
+        self.document.mutate(|b| {
+            if let Some(f) = b.floors.get_mut(floor_idx) {
+                f.move_node(nid, Point2D::new(p[0], p[1]));
+            }
+        });
+        self.drag_moved = true;
+        self.rebuild_model_keep_selection();
+        self.refresh_inspector();
+        self.needs_redraw = true;
+    }
+
+    /// On release of a node drag: commit the transaction (one undo step if it moved).
+    fn end_node_drag(&mut self, _nid: NodeId) {
+        self.document.commit_transaction(self.drag_moved);
+        if self.drag_moved {
+            self.after_edit();
+        }
+        self.drag_moved = false;
     }
 
     /// After any model mutation: refresh labels/model if revision changed, then overlay + hud.
@@ -331,6 +407,7 @@ impl State {
 
     /// After undo/redo the building changed wholesale: rebuild and drop any now-stale selection.
     fn reconcile_after_history(&mut self) {
+        self.cancel_node_drag();
         self.rebuild_model_keep_selection();
         self.document.selection = Selection::None;
         self.inspector = None;
@@ -488,6 +565,15 @@ fn inspector_text(floor: &cad_core::Floor, sel: Selection) -> Option<String> {
                 r.name,
             ))
         }
+        Selection::Node(id) => {
+            let n = floor.node(id)?;
+            Some(format!(
+                "ノード\n座標: ({:.0}, {:.0}) mm\n接続壁: {} 本\nドラッグで移動",
+                n.point.x,
+                n.point.y,
+                floor.walls_at_node(id),
+            ))
+        }
     }
 }
 
@@ -543,10 +629,13 @@ impl ApplicationHandler for App {
                     state.dragging = true;
                     state.moved = false;
                     state.press_cursor = state.cursor;
+                    state.try_grab_node();
                 }
                 ElementState::Released => {
                     state.dragging = false;
-                    if !state.moved {
+                    if let Some(nid) = state.drag_node.take() {
+                        state.end_node_drag(nid);
+                    } else if !state.moved {
                         state.on_click();
                     }
                     state.needs_redraw = true;
@@ -554,7 +643,11 @@ impl ApplicationHandler for App {
             },
             WindowEvent::CursorMoved { position, .. } => {
                 let new = [position.x, position.y];
-                if state.dragging {
+                if state.drag_node.is_some() {
+                    // Dragging a node: move it (grid-snapped); walls + rooms follow.
+                    state.cursor = new;
+                    state.drag_selected_node();
+                } else if state.dragging {
                     state
                         .camera
                         .pan(new[0] - state.cursor[0], new[1] - state.cursor[1]);
@@ -562,9 +655,11 @@ impl ApplicationHandler for App {
                     if d > CLICK_SLOP {
                         state.moved = true;
                     }
+                    state.cursor = new;
                     state.needs_redraw = true;
+                } else {
+                    state.cursor = new;
                 }
-                state.cursor = new;
                 // Live preview follows the cursor while a tool is mid-action.
                 if state.tool != Tool::Select {
                     state.rebuild_overlay();
@@ -582,6 +677,7 @@ impl ApplicationHandler for App {
                 let (w, h) = state.viewport();
                 let factor = 1.1_f64.powf(dy);
                 state.camera.zoom_at(factor, state.cursor, w, h);
+                state.rebuild_overlay(); // node handles are screen-constant
                 state.needs_redraw = true;
             }
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => {

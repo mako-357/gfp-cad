@@ -1,8 +1,36 @@
 //! World-space hit-testing. Priority: openings > walls > rooms.
 
-use cad_core::{Building, Floor, Opening, Point2D};
+use cad_core::{Building, Floor, NodeId, Opening, Point2D};
 
 use crate::document::Selection;
+
+/// Nearest wall-graph node to `world` within `tol` (world mm), for node-move editing.
+pub fn pick_node(floor: &Floor, world: [f64; 2], tol: f64) -> Option<NodeId> {
+    floor
+        .nodes
+        .iter()
+        .map(|n| (n.id, (n.point.x - world[0]).hypot(n.point.y - world[1])))
+        .filter(|(_, d)| *d <= tol)
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(id, _)| id)
+}
+
+/// Snap `world` to the nearest grid-axis intersection / line only (no node snap).
+/// Used while dragging a node so it never snaps onto itself or another node
+/// (coincident distinct nodes would break face derivation).
+pub fn snap_to_grid(building: &Building, world: [f64; 2], tol: f64) -> [f64; 2] {
+    let snap = |axes: &[cad_core::GridAxis], v: f64| -> f64 {
+        axes.iter()
+            .map(|a| a.position)
+            .filter(|g| (g - v).abs() <= tol)
+            .min_by(|a, b| (a - v).abs().total_cmp(&(b - v).abs()))
+            .unwrap_or(v)
+    };
+    [
+        snap(&building.grid.x_axes, world[0]),
+        snap(&building.grid.y_axes, world[1]),
+    ]
+}
 
 /// Snap `world` to the nearest grid-axis intersection / line / wall endpoint
 /// within `tol` (world mm). Returns the snapped point (or the input if none).
