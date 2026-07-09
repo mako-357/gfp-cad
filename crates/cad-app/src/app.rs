@@ -42,6 +42,13 @@ struct State {
     tool_state: ToolState,
     /// Transient one-line hint shown in the HUD (e.g. a missed AddRoom click).
     hint: Option<String>,
+    /// In-app onboarding guide overlay. Shown on **every** launch for now (no
+    /// "seen" flag is persisted yet); dismiss with H / ? / Esc. Persisting a
+    /// first-run-only flag is a follow-up.
+    show_help: bool,
+    help_title: Option<TextBuffer>,
+    help_body: Option<TextBuffer>,
+    help_hint: Option<TextBuffer>,
     /// DPI scale (physical px per logical px). Text sizes/positions are physical
     /// px, so font sizes and screen-space chrome must be multiplied by this.
     ui_scale: f32,
@@ -82,6 +89,10 @@ impl State {
             tool: Tool::Select,
             tool_state: ToolState::default(),
             hint: None,
+            show_help: true, // 起動時に手厚くガイドを出す（毎回・H/Esc で閉じる）
+            help_title: None,
+            help_body: None,
+            help_hint: None,
             ui_scale,
             last_revision: 0,
             cursor: [0.0, 0.0],
@@ -96,8 +107,36 @@ impl State {
         };
         state.rebuild_model();
         state.refresh_hud();
+        state.build_help();
         state.fit();
         state
+    }
+
+    /// Build the in-app guide text buffers (rebuilt on DPI change so font px match).
+    fn build_help(&mut self) {
+        const BODY: &str = "\
+【ツール】数字キーで切替
+  0 選択    クリックで選択 / ノードをドラッグで移動
+  1 壁      2点クリックで壁（連続で描ける）
+  2 部屋    囲まれた領域を1クリック（面積を自動計算）
+  3 開口    壁の近くをクリックでドア
+
+【マウス】
+  ドラッグ … 画面移動（パン）
+  ホイール … ズーム（カーソル位置を固定）
+  ノードのハンドルをドラッグ … 壁・部屋ごと移動
+
+【編集・ファイル】
+  Ctrl+Z / Ctrl+Y … 元に戻す / やり直し
+  Ctrl+S 保存   O 開く   L サンプル   F 全体表示
+  Enter 確定   Esc 取消・選択解除
+
+【ポイント】
+  壁は共有ノードで接合し、離れません。部屋は壁の
+  閉領域から導出されるので、壁を動かすと追従します。";
+        self.help_title = Some(self.label("gfp-cad — 使い方ガイド", 21.0, 700));
+        self.help_body = Some(self.label(BODY, 15.0, 400));
+        self.help_hint = Some(self.label("H でこのガイドを開閉  ・  Esc で閉じる", 13.0, 500));
     }
 
     fn viewport(&self) -> (f64, f64) {
@@ -158,7 +197,7 @@ impl State {
             None => String::new(),
         };
         let text = format!(
-            "[{}]{}  {undo}{redo}   1:壁 2:部屋 3:開口 0:選択  ↵確定 Esc取消 Ctrl+Z/Y Ctrl+S保存{hint}",
+            "[{}]{}  {undo}{redo}   1:壁 2:部屋 3:開口 0:選択  ↵確定 Esc取消 Ctrl+Z/Y Ctrl+S保存  H:ヘルプ{hint}",
             self.tool.label(),
             dirty,
         );
@@ -312,7 +351,7 @@ impl State {
     /// On press in Select mode: if a node is under the cursor, grab it for dragging
     /// (open a coalesced transaction so the whole drag is one undo step).
     fn try_grab_node(&mut self) {
-        if self.tool != Tool::Select {
+        if self.tool != Tool::Select || self.show_help {
             return;
         }
         // Safety: never coalesce a new grab into a stale transaction.
@@ -452,10 +491,33 @@ impl State {
         self.renderer
             .set_camera(&self.gpu.queue, self.camera.transform(w as f32, h as f32));
 
-        // Project label world positions to screen and build text areas.
-        // Screen-space chrome offsets are physical px, so scale by DPI.
         let camera = self.camera;
         let sc = self.ui_scale;
+
+        // Screen-space UI layer (in-app guide). The panel rect is reused for its text.
+        let (pwf, phf) = (pw as f32, ph as f32);
+        let pad = 40.0 * sc;
+        let panel_w = (640.0 * sc).min(pwf - 2.0 * pad);
+        let panel_h = (470.0 * sc).min(phf - 2.0 * pad);
+        let (px0, py0) = ((pwf - panel_w) / 2.0, (phf - panel_h) / 2.0);
+        let mut ui: VertexBuffers<crate::gpu::Vertex, u32> = VertexBuffers::new();
+        if self.show_help {
+            scene::geometry::push_rect(&mut ui, [0.0, 0.0, pwf, phf], 0x0D_0F_14_99); // dim
+            let panel = [px0, py0, px0 + panel_w, py0 + panel_h];
+            scene::geometry::push_rect(&mut ui, panel, 0x20_25_31_FA); // panel body
+            scene::geometry::push_rect(
+                &mut ui,
+                [px0, py0, px0 + panel_w, py0 + 6.0 * sc],
+                0x66_E0_FF_FF,
+            ); // accent
+        }
+        self.renderer
+            .set_screen(&self.gpu.queue, [2.0 / pwf, -2.0 / phf, -1.0, 1.0]);
+        self.renderer
+            .upload_ui(&self.gpu.device, &self.gpu.queue, &ui);
+
+        // Project label world positions to screen and build text areas.
+        // Screen-space chrome offsets are physical px, so scale by DPI.
         let bounds = TextBounds {
             left: 0,
             top: 0,
@@ -501,6 +563,46 @@ impl State {
                 default_color: TextColor::rgb(238, 240, 245),
                 custom_glyphs: &[],
             });
+        }
+        // In-app guide text, positioned inside the panel drawn above. Clip to the
+        // panel rect so a small window can't spill the body onto the dim backdrop.
+        if self.show_help {
+            let tx = px0 + 28.0 * sc;
+            let panel_bounds = TextBounds {
+                left: px0 as i32,
+                top: py0 as i32,
+                right: (px0 + panel_w) as i32,
+                bottom: (py0 + panel_h) as i32,
+            };
+            for (buf, top, color) in [
+                (
+                    &self.help_title,
+                    py0 + 22.0 * sc,
+                    TextColor::rgb(150, 224, 255),
+                ),
+                (
+                    &self.help_body,
+                    py0 + 66.0 * sc,
+                    TextColor::rgb(223, 227, 235),
+                ),
+                (
+                    &self.help_hint,
+                    py0 + panel_h - 30.0 * sc,
+                    TextColor::rgb(140, 146, 158),
+                ),
+            ] {
+                if let Some(buffer) = buf.as_ref() {
+                    areas.push(TextArea {
+                        buffer,
+                        left: tx,
+                        top,
+                        scale: 1.0,
+                        bounds: panel_bounds,
+                        default_color: color,
+                        custom_glyphs: &[],
+                    });
+                }
+            }
         }
         self.text
             .prepare(&self.gpu.device, &self.gpu.queue, pw, ph, areas);
@@ -637,11 +739,12 @@ impl ApplicationHandler for App {
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 // Re-shape every text buffer at the new DPI: model labels, HUD,
-                // and the inspector readout (the last was the N1 regression).
+                // the inspector readout (the N1 regression), and the guide.
                 state.ui_scale = scale_factor as f32;
                 state.rebuild_model_keep_selection();
                 state.refresh_inspector();
                 state.refresh_hud();
+                state.build_help();
                 state.needs_redraw = true;
             }
             WindowEvent::Focused(false) => {
@@ -723,13 +826,19 @@ impl ApplicationHandler for App {
                     Key::Character("2") => state.set_tool(Tool::AddRoom),
                     Key::Character("3") => state.set_tool(Tool::AddOpening),
                     Key::Character("0") => state.set_tool(Tool::Select),
-                    // View / IO.
+                    // View / IO. Suppress the document-replacing / modal-dialog
+                    // ones while the guide overlay is up (they'd act behind it).
                     Key::Character("f" | "F") => state.fit(),
-                    Key::Character("l" | "L") => state.load_sample(),
-                    Key::Character("o" | "O") => state.open_dialog(),
+                    Key::Character("l" | "L") if !state.show_help => state.load_sample(),
+                    Key::Character("o" | "O") if !state.show_help => state.open_dialog(),
+                    Key::Character("h" | "H" | "?") => {
+                        state.show_help = !state.show_help;
+                    }
                     Key::Named(NamedKey::Enter) => state.commit_tool(),
                     Key::Named(NamedKey::Escape) => {
-                        if state.drag_node.is_some() {
+                        if state.show_help {
+                            state.show_help = false;
+                        } else if state.drag_node.is_some() {
                             state.cancel_node_drag(); // roll the drag back
                         } else if state.tool_state.is_active() {
                             state.tool_state.cancel();
